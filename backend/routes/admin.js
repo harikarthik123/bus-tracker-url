@@ -146,8 +146,6 @@ router.delete('/drivers/:id', auth, async (req, res) => {
   }
 });
 
-module.exports = router;
-
 // @route   GET api/admin/buses
 // @desc    Get all buses
 // @access  Private (Admin only)
@@ -520,3 +518,5 @@ router.delete('/alerts/global', auth, async (req, res) => {
     res.status(500).send('Server error');
   }
 });
+
+module.exports = router;
