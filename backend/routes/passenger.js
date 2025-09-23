@@ -1,26 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const Passenger = require('../models/Passenger');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+const auth = require('../middleware/auth');
 const Bus = require('../models/Bus');
 const Alert = require('../models/Alert');
 const Route = require('../models/Route'); // Add Route model
-
-// Passenger login
-router.post('/login', async (req, res) => {
-  const { phone, password } = req.body;
-  try {
-    const passenger = await Passenger.findOne({ phone });
-    if (!passenger) return res.status(400).json({ msg: 'Passenger not found' });
-    const isMatch = await bcrypt.compare(password, passenger.password);
-    if (!isMatch) return res.status(400).json({ msg: 'Invalid credentials' });
-    const token = jwt.sign({ id: passenger._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, passenger });
-  } catch (err) {
-    res.status(500).json({ msg: 'Server error' });
-  }
-});
 
 // Search routes
 router.get('/routes', async (req, res) => {
@@ -57,9 +41,9 @@ router.get('/alerts', async (req, res) => {
 });
 
 // Get passenger profile
-router.get('/me', async (req, res) => {
+router.get('/me', auth, async (req, res) => {
   try {
-    const passenger = await Passenger.findById(req.user.id);
+    const passenger = await User.findById(req.user.id).select('-password');
     res.json(passenger);
   } catch (err) {
     res.status(500).json({ msg: 'Server error' });
