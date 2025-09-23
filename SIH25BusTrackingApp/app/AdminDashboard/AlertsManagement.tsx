@@ -6,7 +6,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAdminI18n } from '../utils/i18n';
 
-const API_URL = 'https://bus-tracker-rjir.onrender.com/api/admin';
+const API_URL = 'https://bus-tracker-url.onrender.com/api/admin';
 
 const AlertsManagement = () => {
   const { t } = useAdminI18n();

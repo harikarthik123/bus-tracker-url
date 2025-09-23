@@ -4,7 +4,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 
-const API_URL = 'https://bus-tracker-rjir.onrender.com/api/auth'; // Update with your API URL
+const API_URL = 'https://bus-tracker-url.onrender.com/api/auth'; // Update with your API URL
 
 const PassengerLogin = () => {
   const router = useRouter();

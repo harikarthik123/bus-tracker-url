@@ -8,7 +8,7 @@ import { FlatList as GestureFlatList } from 'react-native-gesture-handler';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { Picker } from '@react-native-picker/picker';
 
-const API_URL = 'https://bus-tracker-rjir.onrender.com/api/admin'; // Base API URL for admin management
+const API_URL = 'https://bus-tracker-url.onrender.com/api/admin'; // Base API URL for admin management
 
 const { width, height } = Dimensions.get('window');
 const ASPECT_RATIO = width / height;

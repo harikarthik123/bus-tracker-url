@@ -4,7 +4,7 @@
 // import axios from 'axios';
 // import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// const API_URL = 'http://bus-tracker-rjir.onrender.com/api/auth'; // Replace with your backend URL
+// const API_URL = 'http://bus-tracker-url.onrender.com/api/auth'; // Replace with your backend URL
 
 // const OTPScreen = () => {
 //   const { phone } = useLocalSearchParams();

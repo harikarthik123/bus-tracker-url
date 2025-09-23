@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons'; // If you have expo/vector-icons installed
 import { useAdminI18n } from '../utils/i18n';
 
-const API_URL = 'https://bus-tracker-rjir.onrender.com/api/admin/drivers'; // API URL for driver management
+const API_URL = 'https://bus-tracker-url.onrender.com/api/admin/drivers'; // API URL for driver management
 
 const DriverManagement = () => {
   const router = useRouter();

@@ -7,8 +7,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { useAdminI18n } from '../utils/i18n';
 
-const ADMIN_API_URL = 'https://bus-tracker-rjir.onrender.com/api/admin';
-const LOCATION_API_URL = 'https://bus-tracker-rjir.onrender.com/api/location';
+const ADMIN_API_URL = 'https://bus-tracker-url.onrender.com/api/admin';
+const LOCATION_API_URL = 'https://bus-tracker-url.onrender.com/api/location';
 
 const { height } = Dimensions.get('window');
 

@@ -6,7 +6,7 @@ import { Picker } from '@react-native-picker/picker';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = 'https://bus-tracker-rjir.onrender.com/api/admin'; // Base API URL for admin management
+const API_URL = 'https://bus-tracker-url.onrender.com/api/admin'; // Base API URL for admin management
 
 type Driver = {
   _id: string;

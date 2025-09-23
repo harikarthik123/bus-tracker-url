@@ -7,8 +7,8 @@ import * as Location from 'expo-location'; // Import the Location module
 import { useRouter } from 'expo-router';
 
 // Backend URLs
-const API_URL = 'https://bus-tracker-rjir.onrender.com/api/passenger';
-const LOCATION_API_URL = 'https://bus-tracker-rjir.onrender.com/api/location';
+const API_URL = 'https://bus-tracker-url.onrender.com/api/passenger';
+const LOCATION_API_URL = 'https://bus-tracker-url.onrender.com/api/location';
 
 const PassengerDashboard = () => {
   const [search, setSearch] = useState('');

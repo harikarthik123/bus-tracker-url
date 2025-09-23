@@ -4,8 +4,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import axios from 'axios';
-// Assuming your backend is running on http://bus-tracker-rjir.onrender.com
-const API_URL = 'https://bus-tracker-rjir.onrender.com/api/driver'; 
+// Assuming your backend is running on http://bus-tracker-url.onrender.com
+const API_URL = 'https://bus-tracker-url.onrender.com/api/driver'; 
 const DriverDashboard = () => {
   const router = useRouter();
   const [assignedBus, setAssignedBus] = useState<any>(null);

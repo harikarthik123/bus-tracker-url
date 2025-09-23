@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = 'https://bus-tracker-rjir.onrender.com/api/auth'; // Replace with your backend URL
+const API_URL = 'https://bus-tracker-url.onrender.com/api/auth'; // Replace with your backend URL
 
 const PassengerSignupScreen = () => {
   const [name, setName] = useState('');
