@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="108" height="108" viewBox="0 0 108 108" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="54" cy="54" r="54" fill="#000000"/>
+  
+  <!-- Bus body -->
+  <rect x="20" y="35" width="68" height="38" rx="4" fill="#4185F3"/>
+  
+  <!-- Bus windows -->
+  <rect x="25" y="40" width="12" height="12" rx="2" fill="#FFFFFF" opacity="0.9"/>
+  <rect x="40" y="40" width="12" height="12" rx="2" fill="#FFFFFF" opacity="0.9"/>
+  <rect x="55" y="40" width="12" height="12" rx="2" fill="#FFFFFF" opacity="0.9"/>
+  <rect x="70" y="40" width="12" height="12" rx="2" fill="#FFFFFF" opacity="0.9"/>
+  
+  <!-- Bus wheels -->
+  <circle cx="30" cy="78" r="6" fill="#333333"/>
+  <circle cx="78" cy="78" r="6" fill="#333333"/>
+  
+  <!-- Bus door -->
+  <rect x="25" y="55" width="8" height="18" rx="1" fill="#FFFFFF" opacity="0.8"/>
+  
+  <!-- BusBee text -->
+  <text x="54" y="95" text-anchor="middle" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="12" font-weight="bold">BusBee</text>
+</svg>

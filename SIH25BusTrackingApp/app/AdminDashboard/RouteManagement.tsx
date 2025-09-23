@@ -1,0 +1,544 @@
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TextInput, TouchableOpacity, FlatList, Alert, Platform, Dimensions } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useAdminI18n } from '../utils/i18n';
+import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { FlatList as GestureFlatList } from 'react-native-gesture-handler';
+import MapView, { Marker, Polyline } from 'react-native-maps';
+import { Picker } from '@react-native-picker/picker';
+
+const API_URL = 'https://bus-tracker-rjir.onrender.com/api/admin'; // Base API URL for admin management
+
+const { width, height } = Dimensions.get('window');
+const ASPECT_RATIO = width / height;
+const LATITUDE_DELTA = 0.0922;
+const LONGITUDE_DELTA = LATITUDE_DELTA * ASPECT_RATIO;
+
+interface StopType {
+  _id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  order: number;
+}
+
+interface CoordinateType {
+  latitude: number;
+  longitude: number;
+}
+
+interface RouteType {
+  _id: string;
+  name: string;
+  stops: StopType[];
+  duration: string;
+  routeCoordinates: CoordinateType[];
+}
+
+const RouteManagement = () => {
+  const router = useRouter();
+  const { t } = useAdminI18n();
+  const [routes, setRoutes] = useState<RouteType[]>([]);
+  const [name, setName] = useState('');
+  const [duration, setDuration] = useState('');
+  const [stops, setStops] = useState<StopType[]>([]);
+  const [newStopName, setNewStopName] = useState('');
+  const [editingRouteId, setEditingRouteId] = useState<string | null>(null);
+  const [mapRegion, setMapRegion] = useState({
+    latitude: 12.9716, // Default to Bangalore
+    longitude: 77.5946,
+    latitudeDelta: LATITUDE_DELTA,
+    longitudeDelta: LONGITUDE_DELTA,
+  });
+  const [routeCoordinates, setRouteCoordinates] = useState<CoordinateType[]>([]); // For Polyline
+  const [mapMode, setMapMode] = useState<'route' | 'stop' | null>(null); // 'route' or 'stop'
+
+  useEffect(() => {
+    fetchRoutes();
+  }, []);
+
+  const fetchRoutes = async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      const response = await axios.get(`${API_URL}/routes`, {
+        headers: { 'x-auth-token': token },
+      });
+      setRoutes(response.data);
+
+    } catch (error) {
+      console.error('Error fetching routes:', error);
+      Alert.alert('Error', 'Failed to fetch routes.');
+    }
+  };
+
+  const handleMapPress = (event: any) => {
+    const { latitude, longitude } = event.nativeEvent.coordinate;
+    if (mapMode === 'route') {
+      setRouteCoordinates(prev => [...prev, { latitude, longitude }]);
+    } else if (mapMode === 'stop') {
+      setStops(prev => [...prev, { name: `Stop ${prev.length + 1}`, latitude, longitude, order: prev.length + 1 }]);
+    }
+  };
+
+  const handleAddStop = () => {
+    if (!newStopName || routeCoordinates.length === 0) {
+      Alert.alert('Error', 'Please set a stop name and define route points on the map.');
+      return;
+    }
+    // For simplicity, let's add a stop at the last clicked route coordinate for now, or the center of the map if no route points.
+    const lastRouteCoordinate = routeCoordinates[routeCoordinates.length - 1];
+    const stopLocation = lastRouteCoordinate || { latitude: mapRegion.latitude, longitude: mapRegion.longitude };
+
+    const newStop = {
+      name: newStopName,
+      latitude: stopLocation.latitude,
+      longitude: stopLocation.longitude,
+      order: stops.length + 1,
+    };
+    setStops(prev => [...prev, newStop]);
+    setNewStopName('');
+  };
+
+  const handleRemoveStop = (order: number) => {
+    setStops(stops.filter((stop) => stop.order !== order));
+  };
+
+  const handleAddRoute = async () => {
+    if (!name || !duration || routeCoordinates.length < 2 || stops.length === 0) {
+      Alert.alert('Error', 'Please fill in route name, duration, define at least two route points, and add at least one stop.');
+      return;
+    }
+    try {
+      const token = await AsyncStorage.getItem('token');
+      const response = await axios.post(`${API_URL}/routes`, { name, duration, routeCoordinates, stops }, { headers: { 'x-auth-token': token } });
+      setRoutes(prev => [...prev, response.data.route]);
+      setName('');
+      setDuration('');
+      setStops([]);
+      setRouteCoordinates([]);
+      setMapMode(null);
+      Alert.alert('Success', 'Route created successfully!');
+    } catch (error) {
+      console.error('Error creating route:', error);
+      Alert.alert('Error', 'Failed to create route.');
+    }
+  };
+
+  const handleEditRoute = (route: any) => {
+    setEditingRouteId(route._id);
+    setName(route.name);
+    setDuration(route.duration);
+    setStops(route.stops);
+    setRouteCoordinates(route.routeCoordinates || []); // Load existing route coordinates
+    if (route.routeCoordinates && route.routeCoordinates.length > 0) {
+      setMapRegion({
+        latitude: route.routeCoordinates[0].latitude,
+        longitude: route.routeCoordinates[0].longitude,
+        latitudeDelta: LATITUDE_DELTA,
+        longitudeDelta: LONGITUDE_DELTA,
+      });
+    }
+  };
+
+  const handleUpdateRoute = async () => {
+    if (!name || !duration || routeCoordinates.length < 2 || stops.length === 0 || !editingRouteId) {
+      Alert.alert('Error', 'Please fill in route name, duration, define at least two route points, add at least one stop, and select a route to update.');
+      return;
+    }
+    try {
+      const token = await AsyncStorage.getItem('token');
+      const response = await axios.put(
+        `${API_URL}/routes/${editingRouteId}`,
+        { name, duration, routeCoordinates, stops },
+        { headers: { 'x-auth-token': token } }
+      );
+      setRoutes(prev => prev.map(r => (r._id === editingRouteId ? response.data.route : r)));
+      setName('');
+      setDuration('');
+      setStops([]);
+      setRouteCoordinates([]);
+      setEditingRouteId(null);
+      setMapMode(null);
+      Alert.alert('Success', 'Route updated successfully!');
+    } catch (error) {
+      console.error('Error updating route:', error);
+      Alert.alert('Error', 'Failed to update route.');
+    }
+  };
+
+  const handleDeleteRoute = async (id: string) => {
+    Alert.alert(
+      'Delete Route',
+      'Are you sure you want to delete this route?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          onPress: async () => {
+            try {
+              const token = await AsyncStorage.getItem('token');
+              await axios.delete(`${API_URL}/routes/${id}`, { headers: { 'x-auth-token': token } });
+              setRoutes(prev => prev.filter(r => r._id !== id));
+            } catch (err) {
+              console.error('Error deleting route:', err);
+              Alert.alert('Error', 'Failed to delete route.');
+            }
+          },
+          style: 'destructive',
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  const renderRouteItem = ({ item }: { item: any }) => (
+    <View style={styles.routeItem}>
+      <View>
+        <Text style={styles.routeName}>{item.name}</Text>
+        <Text style={styles.routeDetails}>Duration: {item.duration}</Text>
+        <Text style={styles.routeDetails}>Stops:</Text>
+        {item.stops.map((stop: any, index: number) => (
+          <Text key={index} style={styles.stopText}>  {stop.order}. {stop.name} (Lat: {stop.latitude}, Lng: {stop.longitude})</Text>
+        ))}
+        <Text style={styles.routeDetails}>Route Points:</Text>
+        {item.routeCoordinates?.map((coord: any, index: number) => (
+          <Text key={`coord-${index}`} style={styles.stopText}>  {index + 1}. Lat: {coord.latitude}, Lng: {coord.longitude}</Text>
+        ))}
+      </View>
+      <View style={styles.routeActions}>
+        <TouchableOpacity style={styles.editButton} onPress={() => handleEditRoute(item)}>
+          <Text style={styles.buttonText}>Edit</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteRoute(item._id)}>
+          <Text style={styles.buttonText}>Delete</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={styles.safeArea}>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.navButton} onPress={() => router.back()}>
+          <Text style={styles.navButtonText}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={styles.title}>{t('screen.route.title')}</Text>
+        <View style={{ width: 80 }} />
+      </View>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+
+        <View style={styles.formContainer}>
+          <TextInput
+            style={styles.input}
+            placeholder="Route Name"
+            value={name}
+            onChangeText={setName}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Duration (e.g., 30 minutes)"
+            value={duration}
+            onChangeText={setDuration}
+          />
+
+          <Text style={styles.subTitle}>Define Route on Map</Text>
+          <View style={styles.mapControls}>
+            <TouchableOpacity 
+              style={[styles.mapModeButton, mapMode === 'route' && styles.activeMapMode]}
+              onPress={() => setMapMode('route')}
+            >
+              <Text style={styles.buttonText}>Draw Route</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.mapModeButton, mapMode === 'stop' && styles.activeMapMode]}
+              onPress={() => setMapMode('stop')}
+            >
+              <Text style={styles.buttonText}>Add Stops</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.clearMapButton}
+              onPress={() => { setRouteCoordinates([]); setStops([]); setMapMode(null); setNewStopName(''); }}
+            >
+              <Text style={styles.buttonText}>Clear Map</Text>
+            </TouchableOpacity>
+          </View>
+
+          {mapMode === 'stop' && (
+            <TextInput
+              style={styles.input}
+              placeholder="New Stop Name (click on map to place)"
+              value={newStopName}
+              onChangeText={setNewStopName}
+            />
+          )}
+
+          <MapView
+            style={styles.map}
+            region={mapRegion}
+            onRegionChangeComplete={setMapRegion}
+            onPress={handleMapPress}
+            showsUserLocation
+          >
+            {routeCoordinates.length > 0 && (
+              <Polyline coordinates={routeCoordinates} strokeWidth={3} strokeColor="red" />
+            )}
+            {stops.map((stop: any, index: number) => (
+              <Marker
+                key={`stop-${index}`}
+                coordinate={{ latitude: stop.latitude, longitude: stop.longitude }}
+                title={stop.name}
+                pinColor="blue"
+              />
+            ))}
+          </MapView>
+
+          <Text style={styles.subTitle}>Current Route Points</Text>
+          {routeCoordinates.map((coord, index) => (
+            <Text key={`coord-display-${index}`} style={styles.stopText}>
+              {index + 1}. Lat: {coord.latitude.toFixed(4)}, Lng: {coord.longitude.toFixed(4)}
+            </Text>
+          ))}
+
+          <Text style={styles.subTitle}>Current Stops</Text>
+          <View style={styles.stopsListContainer}>
+            {stops.map((stop, index) => (
+              <View key={index} style={styles.stopItem}>
+                <Text style={styles.stopText}>{stop.order}. {stop.name} (Lat: {stop.latitude.toFixed(4)}, Lng: {stop.longitude.toFixed(4)})</Text>
+                <TouchableOpacity onPress={() => handleRemoveStop(stop.order)}>
+                  <Text style={styles.removeStopText}>Remove</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+          
+          <TouchableOpacity
+            style={[styles.actionButton, editingRouteId ? styles.updateButton : styles.createButton]}
+            onPress={editingRouteId ? handleUpdateRoute : handleAddRoute}
+          >
+            <Text style={styles.buttonText}>
+              {editingRouteId ? 'Update Route' : 'Add Route'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.listTitle}>Existing Routes</Text>
+        <FlatList
+          data={routes}
+          renderItem={renderRouteItem}
+          keyExtractor={(item) => item._id.toString()}
+          ListEmptyComponent={<Text>No routes added yet.</Text>}
+          style={styles.routeList}
+        />
+
+      </ScrollView>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#f0f2f5',
+    paddingTop: Platform.OS === 'android' ? 30 : 0,
+  },
+  header: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 18,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e3e3e3',
+    elevation: 2,
+  },
+  navButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 6,
+    backgroundColor: '#007bff',
+    marginHorizontal: 4,
+    elevation: 2,
+  },
+  navButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 15,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    padding: 20,
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    textAlign: 'center',
+    flex: 1,
+  },
+  subTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 15,
+    marginTop: 20,
+    width: '100%',
+  },
+  formContainer: {
+    width: '100%',
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 10,
+    marginBottom: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  input: {
+    width: '100%',
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 5,
+    marginBottom: 15,
+    fontSize: 16,
+  },
+  mapControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 15,
+    width: '100%',
+  },
+  mapModeButton: {
+    backgroundColor: '#6c757d',
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 5,
+  },
+  activeMapMode: {
+    backgroundColor: '#007bff',
+  },
+  clearMapButton: {
+    backgroundColor: '#dc3545',
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 5,
+  },
+  map: {
+    width: '100%',
+    height: 300,
+    marginBottom: 20,
+    borderRadius: 10,
+  },
+  stopInputContainer: {
+    flexDirection: 'row',
+    marginBottom: 10,
+  },
+  addStopButton: {
+    backgroundColor: '#007bff',
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 5,
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  stopsListContainer: {
+    width: '100%',
+    marginBottom: 20,
+  },
+  stopItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#f8f8f8',
+    padding: 10,
+    borderRadius: 5,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+  stopText: {
+    fontSize: 14,
+    color: '#555',
+  },
+  removeStopText: {
+    color: '#dc3545',
+    fontWeight: 'bold',
+  },
+  actionButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  createButton: {
+    backgroundColor: '#28a745',
+  },
+  updateButton: {
+    backgroundColor: '#007bff',
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  listTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 20,
+    textAlign: 'center',
+    width: '100%',
+  },
+  routeList: {
+    width: '100%',
+  },
+  routeItem: {
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  routeName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  routeDetails: {
+    fontSize: 14,
+    color: '#555',
+    marginBottom: 2,
+  },
+  routeActions: {
+    flexDirection: 'row',
+  },
+  editButton: {
+    backgroundColor: '#ffc107',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 5,
+    marginLeft: 10,
+  },
+  deleteButton: {
+    backgroundColor: '#dc3545',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 5,
+    marginLeft: 10,
+  },
+});
+
+export default RouteManagement;
