@@ -1,16 +1,72 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { View, TextInput, TouchableOpacity, StyleSheet, Alert, Animated, Easing, LayoutChangeEvent } from 'react-native';
 import { router } from 'expo-router';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import { useThemeColor } from '@/hooks/use-theme-color';
 
-const API_URL = 'https://bus-tracker-url.onrender.com/api/auth'; // Replace with your backend URL
+const API_URL = 'http://192.168.137.1:5000/api/auth'; // Replace with your backend URL
 
 const LoginScreen = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState('passenger'); // 'admin', 'driver', 'passenger'
+
+  const tint = useThemeColor({}, 'tint');
+  const textColor = useThemeColor({}, 'text');
+  const background = useThemeColor({}, 'background');
+  const border = useThemeColor({}, 'border');
+  const mutedBackground = useThemeColor({}, 'mutedBackground');
+  const card = useThemeColor({}, 'card');
+
+  const roleAccent = useMemo(() => {
+    // Use consistent orange theme for all roles
+    return '#D97706'; // amber-600 - consistent orange for all roles
+  }, [role]);
+
+  const selectedTextColor = useMemo(() => {
+    // Always use white text for better contrast on orange background
+    return '#FFFFFF';
+  }, [roleAccent]);
+
+  const styles = getStyles({ tint, textColor, background, border, mutedBackground, card, accent: roleAccent });
+
+  // Animations
+  const headerOpacity = useRef(new Animated.Value(0)).current;
+  const headerTranslate = useRef(new Animated.Value(16)).current;
+  const cardOpacity = useRef(new Animated.Value(0)).current;
+  const cardTranslate = useRef(new Animated.Value(24)).current;
+  const buttonScale = useRef(new Animated.Value(1)).current;
+  const indicatorX = useRef(new Animated.Value(0)).current;
+  const [toggleWidth, setToggleWidth] = useState(0);
+
+  const onToggleLayout = (e: LayoutChangeEvent) => {
+    const w = e.nativeEvent.layout.width;
+    setToggleWidth(w);
+  };
+
+  useEffect(() => {
+    if (!toggleWidth) return;
+    const segment = toggleWidth / 3;
+    const index = role === 'admin' ? 0 : role === 'driver' ? 1 : 2;
+    Animated.timing(indicatorX, { toValue: index * segment, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, [role, toggleWidth]);
+
+  useEffect(() => {
+    Animated.sequence([
+      Animated.parallel([
+        Animated.timing(headerOpacity, { toValue: 1, duration: 450, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(headerTranslate, { toValue: 0, duration: 450, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      ]),
+      Animated.parallel([
+        Animated.timing(cardOpacity, { toValue: 1, duration: 450, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(cardTranslate, { toValue: 0, duration: 450, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      ]),
+    ]).start();
+  }, []);
 
   const handleLogin = async () => {
     try {
@@ -56,147 +112,215 @@ const LoginScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.roleToggle}>
+    <ThemedView style={styles.container}>
+      <Animated.View style={[styles.headerContainer, { opacity: headerOpacity, transform: [{ translateY: headerTranslate }] }]}>
+        <ThemedText type="title" style={styles.title}>Welcome back</ThemedText>
+        <ThemedText type="subtitle" style={[styles.subtitle, { color: roleAccent }]}>Sign in to continue</ThemedText>
+      </Animated.View>
+
+      <View style={styles.roleToggle} onLayout={onToggleLayout}>
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.roleIndicator,
+            {
+              width: toggleWidth ? toggleWidth / 3 : 0,
+              transform: [{ translateX: indicatorX }],
+              backgroundColor: roleAccent,
+            },
+          ]}
+        />
         <TouchableOpacity
           style={[styles.roleButton, role === 'admin' && styles.selectedRoleButton]}
           onPress={() => setRole('admin')}
         >
-          <Text style={[styles.roleButtonText, role === 'admin' && styles.selectedRoleButtonText]}>Admin</Text>
+          <ThemedText style={[styles.roleButtonText, role === 'admin' && styles.selectedRoleButtonText]}>Admin</ThemedText>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.roleButton, role === 'driver' && styles.selectedRoleButton]}
           onPress={() => setRole('driver')}
         >
-          <Text style={[styles.roleButtonText, role === 'driver' && styles.selectedRoleButtonText]}>Driver</Text>
+          <ThemedText style={[styles.roleButtonText, role === 'driver' && styles.selectedRoleButtonText]}>Driver</ThemedText>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.roleButton, role === 'passenger' && styles.selectedRoleButton]}
           onPress={() => setRole('passenger')}
         >
-          <Text style={[styles.roleButtonText, role === 'passenger' && styles.selectedRoleButtonText]}>Passenger</Text>
+          <ThemedText style={[styles.roleButtonText, role === 'passenger' && styles.selectedRoleButtonText]}>Passenger</ThemedText>
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.loginAsText}>Login as {role}</Text>
+      <Animated.View style={[styles.cardContainer, { opacity: cardOpacity, transform: [{ translateY: cardTranslate }] }]}>
+        <ThemedText style={styles.loginAsText}>Login as {role}</ThemedText>
 
-      {role !== 'passenger' ? (
-        <>
+        {role !== 'passenger' ? (
+          <>
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor={border}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor={border}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+          </>
+        ) : (
           <TextInput
             style={styles.input}
-            placeholder="Email"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
+            placeholder="Phone Number"
+            placeholderTextColor={border}
+            value={phone}
+            onChangeText={setPhone}
+            keyboardType="phone-pad"
             autoCapitalize="none"
           />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
-        </>
-      ) : (
-        <TextInput
-          style={styles.input}
-          placeholder="Phone Number"
-          value={phone}
-          onChangeText={setPhone}
-          keyboardType="phone-pad"
-          autoCapitalize="none"
-        />
-      )}
+        )}
 
-      <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-        <Text style={styles.loginButtonText}>Login</Text>
-      </TouchableOpacity>
-
-      {role === 'passenger' && (
-        <View style={styles.signUpContainer}>
-          <Text style={styles.signUpText}>Don't have an account? </Text>
-          <TouchableOpacity onPress={() => router.push('/PassengerSignupScreen')}>
-            <Text style={styles.signUpLink}>Sign Up</Text>
+        <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+          <TouchableOpacity
+            style={[styles.loginButton, { backgroundColor: roleAccent }]}
+            onPress={handleLogin}
+            onPressIn={() => {
+              Animated.spring(buttonScale, { toValue: 0.98, useNativeDriver: true, speed: 20, bounciness: 6 }).start();
+            }}
+            onPressOut={() => {
+              Animated.spring(buttonScale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 6 }).start();
+            }}
+          >
+            <ThemedText style={styles.loginButtonText}>Login</ThemedText>
           </TouchableOpacity>
-        </View>
-      )}
-    </View>
+        </Animated.View>
+
+        {role === 'passenger' && (
+          <View style={styles.signUpContainer}>
+            <ThemedText style={styles.signUpText}>Don't have an account? </ThemedText>
+            <TouchableOpacity onPress={() => router.push('/PassengerSignupScreen')}>
+              <ThemedText style={styles.signUpLink}>Sign Up</ThemedText>
+            </TouchableOpacity>
+          </View>
+        )}
+      </Animated.View>
+    </ThemedView>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f0f2f5',
-    padding: 20,
-  },
-  roleToggle: {
-    flexDirection: 'row',
-    marginBottom: 30,
-    backgroundColor: '#e0e0e0',
-    borderRadius: 5,
-    overflow: 'hidden',
-  },
-  roleButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    backgroundColor: '#e0e0e0',
-  },
-  selectedRoleButton: {
-    backgroundColor: '#2c3e50',
-  },
-  roleButtonText: {
-    color: '#333',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  selectedRoleButtonText: {
-    color: '#fff',
-  },
-  loginAsText: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 30,
-    color: '#333',
-  },
-  input: {
-    width: '100%',
-    backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 5,
-    marginBottom: 15,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  loginButton: {
-    width: '100%',
-    backgroundColor: '#2c3e50',
-    padding: 15,
-    borderRadius: 5,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  loginButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  signUpContainer: {
-    flexDirection: 'row',
-    marginTop: 20,
-  },
-  signUpText: {
-    fontSize: 14,
-    color: '#555',
-  },
-  signUpLink: {
-    fontSize: 14,
-    color: '#3498db',
-    fontWeight: 'bold',
-  },
-});
+const getStyles = (c: { tint: string; textColor: string; background: string; border: string; mutedBackground: string; card: string; accent: string; }) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: '#FFFBEB',
+      padding: 20,
+    },
+    headerContainer: {
+      width: '100%',
+      marginBottom: 12,
+    },
+    title: {
+      fontSize: 34,
+      fontWeight: 'bold',
+      color: '#1F2937',
+    },
+    subtitle: {
+      marginTop: 6,
+      color: c.tint,
+    },
+    roleToggle: {
+      flexDirection: 'row',
+      marginTop: 12,
+      marginBottom: 20,
+      backgroundColor: c.mutedBackground,
+      borderRadius: 999,
+      overflow: 'hidden',
+      position: 'relative',
+    },
+    roleIndicator: {
+      position: 'absolute',
+      top: 0,
+      bottom: 0,
+      left: 0,
+      borderRadius: 999,
+    },
+    roleButton: {
+      paddingVertical: 10,
+      paddingHorizontal: 18,
+      backgroundColor: 'transparent',
+    },
+    selectedRoleButton: {
+      backgroundColor: c.accent,
+    },
+    roleButtonText: {
+      color: c.textColor,
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    selectedRoleButtonText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    cardContainer: {
+      width: '100%',
+      backgroundColor: c.card,
+      borderRadius: 12,
+      padding: 16,
+      shadowColor: '#000',
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 3,
+    },
+    loginAsText: {
+      fontSize: 20,
+      fontWeight: '700',
+      marginBottom: 16,
+    },
+    input: {
+      width: '100%',
+      backgroundColor: '#FFFFFF',
+      padding: 14,
+      borderRadius: 10,
+      marginBottom: 12,
+      fontSize: 16,
+      borderWidth: 1,
+      borderColor: c.border,
+      color: '#0F172A',
+    },
+    loginButton: {
+      width: '100%',
+      backgroundColor: c.tint,
+      padding: 15,
+      borderRadius: 10,
+      alignItems: 'center',
+      marginTop: 8,
+    },
+    loginButtonText: {
+      color: '#FFFFFF',
+      fontSize: 18,
+      fontWeight: 'bold',
+    },
+    signUpContainer: {
+      flexDirection: 'row',
+      marginTop: 16,
+    },
+    signUpText: {
+      fontSize: 14,
+      color: c.textColor,
+    },
+    signUpLink: {
+      fontSize: 14,
+      color: c.tint,
+      fontWeight: 'bold',
+    },
+  });
 export default LoginScreen;

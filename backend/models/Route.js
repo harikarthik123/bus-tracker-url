@@ -35,7 +35,26 @@ const RouteSchema = new mongoose.Schema({
       longitude: { type: Number, required: true },
     },
   ],
+  // GeoJSON shape for high-resolution route geometry (LineString or MultiLineString)
+  shape: {
+    type: {
+      type: String,
+      enum: ['LineString', 'MultiLineString'],
+    },
+    coordinates: {
+      // LineString: [ [lng, lat], ... ]
+      // MultiLineString: [ [ [lng, lat], ... ], ... ]
+      type: Array,
+      default: undefined,
+    },
+  },
+  shapeSource: {
+    type: String, // 'geojson' | 'gpx'
+  },
   // Add other route-related fields as needed
 });
+
+// Geospatial index for fast queries on the route shape
+RouteSchema.index({ shape: '2dsphere' });
 
 module.exports = mongoose.model('Route', RouteSchema);

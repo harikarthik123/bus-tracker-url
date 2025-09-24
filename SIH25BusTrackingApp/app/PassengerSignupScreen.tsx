@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = 'https://bus-tracker-url.onrender.com/api/auth'; // Replace with your backend URL
+const API_URL = 'http://192.168.137.1:5000/api/auth'; // Replace with your backend URL
 
 const PassengerSignupScreen = () => {
   const [name, setName] = useState('');
@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f0f2f5',
+    backgroundColor: '#FFFBEB', // Orange-tinted background
     padding: 20,
   },
   title: {
@@ -74,11 +74,11 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#F59E0B', // Orange border
   },
   signupButton: {
     width: '100%',
-    backgroundColor: '#3498db',
+    backgroundColor: '#D97706', // Orange button
     padding: 15,
     borderRadius: 5,
     alignItems: 'center',
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
   loginLink: {
     marginTop: 20,
     fontSize: 14,
-    color: '#3498db',
+    color: '#D97706', // Orange text
     fontWeight: 'bold',
   },
 });

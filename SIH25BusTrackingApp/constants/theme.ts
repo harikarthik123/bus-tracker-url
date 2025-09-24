@@ -5,25 +5,41 @@
 
 import { Platform } from 'react-native';
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
+// Primary orange/amber palette
+const primaryOrange = '#F59E0B'; // amber-500
+const primaryOrangeDark = '#D97706'; // amber-600
+const primaryOrangeLight = '#FDE68A'; // amber-200
+const softBackground = '#FFFBEB'; // amber-50
+const textDark = '#0F172A';
+const textLight = '#F8FAFC';
+const borderLight = '#F1F5F9';
+const borderDark = '#334155';
+
+const tintColorLight = primaryOrange;
+const tintColorDark = textLight;
 
 export const Colors = {
   light: {
-    text: '#11181C',
-    background: '#fff',
+    text: textDark,
+    background: softBackground, // Use orange-tinted background
     tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
+    icon: primaryOrangeDark,
+    tabIconDefault: '#94A3B8',
     tabIconSelected: tintColorLight,
+    card: '#FFFFFF',
+    mutedBackground: softBackground,
+    border: borderLight,
   },
   dark: {
-    text: '#ECEDEE',
-    background: '#151718',
+    text: textLight,
+    background: '#0B1220',
     tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
+    icon: primaryOrangeLight,
+    tabIconDefault: '#64748B',
     tabIconSelected: tintColorDark,
+    card: '#0F172A',
+    mutedBackground: '#0B1220',
+    border: borderDark,
   },
 };
 

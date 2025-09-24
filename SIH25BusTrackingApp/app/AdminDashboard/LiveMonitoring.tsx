@@ -1,18 +1,23 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform, Dimensions } from 'react-native';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { useAdminI18n } from '../utils/i18n';
 
-const ADMIN_API_URL = 'https://bus-tracker-url.onrender.com/api/admin';
-const LOCATION_API_URL = 'https://bus-tracker-url.onrender.com/api/location';
+const ADMIN_API_URL = 'http://192.168.137.1:5000/api/admin';
+const LOCATION_API_URL = 'http://192.168.137.1:5000/api/location';
 
-const { height } = Dimensions.get('window');
+  const { width, height } = Dimensions.get('window');
+  const spacing = Math.max(10, Math.min(18, Math.round(width * 0.04)));
 
-const LiveMonitoring = () => {
+type LiveMonitoringProps = {
+  showHeader?: boolean;
+};
+
+const LiveMonitoring = ({ showHeader = true }: LiveMonitoringProps) => {
   const router = useRouter();
   const { t } = useAdminI18n();
   const [buses, setBuses] = useState<any[]>([]);
@@ -249,29 +254,28 @@ const LiveMonitoring = () => {
 
   return (
     <View style={styles.safeArea}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backButtonText}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>{t('screen.live.title')}</Text>
-        <View style={styles.headerRight}>
-          <TouchableOpacity 
-            style={[styles.refreshButton, isRefreshing && styles.refreshButtonDisabled]} 
-            onPress={handleRefresh}
-            disabled={isRefreshing}
-          >
-            <Text style={styles.refreshButtonText}>{isRefreshing ? '⟳' : '↻'}</Text>
-          </TouchableOpacity>
-          <View style={[styles.status, { backgroundColor: isOnline ? '#28a745' : '#dc3545' }]}>
-            <Text style={styles.statusText}>{isOnline ? 'Online' : 'Offline'}</Text>
+      {showHeader && (
+        <View style={styles.header}>
+          <Text style={styles.title}>Admin Dashboard • Live Monitoring</Text>
+          <View style={styles.headerRight}>
+            <TouchableOpacity 
+              style={[styles.refreshButton, isRefreshing && styles.refreshButtonDisabled]} 
+              onPress={handleRefresh}
+              disabled={isRefreshing}
+            >
+              <Text style={styles.refreshButtonText}>{isRefreshing ? '⟳' : '↻'}</Text>
+            </TouchableOpacity>
+            <View style={[styles.status, { backgroundColor: isOnline ? '#28a745' : '#dc3545' }]}>
+              <Text style={styles.statusText}>{isOnline ? 'Online' : 'Offline'}</Text>
+            </View>
           </View>
         </View>
-      </View>
+      )}
 
-      <View style={styles.filters}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <View style={[styles.filters, { padding: spacing }]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: spacing/2 }}>
           <TouchableOpacity 
-            style={[styles.filterBtn, !selectedRoute && styles.activeFilter]} 
+            style={[styles.filterBtn, { marginRight: spacing/2 }, !selectedRoute && styles.activeFilter]} 
             onPress={() => setSelectedRoute(null)}
           >
             <Text style={[styles.filterText, !selectedRoute && styles.activeFilterText]}>{t('common.allRoutes')}</Text>
@@ -279,7 +283,7 @@ const LiveMonitoring = () => {
           {routes.map(r => (
             <TouchableOpacity 
               key={r._id} 
-              style={[styles.filterBtn, selectedRoute?._id === r._id && styles.activeFilter]} 
+              style={[styles.filterBtn, { marginRight: spacing/2 }, selectedRoute?._id === r._id && styles.activeFilter]} 
               onPress={() => {
                 setSelectedRoute(r);
                 navigateToRoute(r);
@@ -292,42 +296,27 @@ const LiveMonitoring = () => {
         <Text style={styles.debugText}>
           Debug: {busLocations.length} buses total ({busLocations.filter(loc => loc.isActive === undefined ? true : loc.isActive === true).length} active, {busLocations.filter(loc => loc.isActive === false).length} last known) | User: {userLocation ? 'Located' : 'Not located'}
         </Text>
-        {!selectedRoute && routes.length > 1 && (
-          <View style={styles.legendContainer}>
-            <Text style={styles.legendTitle}>Routes Legend:</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.legendScroll}>
-              {routes.map((route, index) => (
-                <View key={route._id} style={styles.legendItem}>
-                  <View style={[
-                    styles.legendColor, 
-                    { backgroundColor: `hsl(${(index * 137.5) % 360}, 70%, 50%)` }
-                  ]} />
-                  <Text style={styles.legendText}>{route.name}</Text>
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-        <View style={styles.legendContainer}>
-          <Text style={styles.legendTitle}>Bus Status Legend:</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.legendScroll}>
-            <View style={styles.legendItem}>
-              <View style={[styles.busMarker, { backgroundColor: '#007bff', width: 20, height: 20 }]}>
-                <Text style={[styles.busIcon, { fontSize: 12 }]}>🚌</Text>
+        {/* Routes legend removed as requested */}
+        <View style={{ paddingHorizontal: 12, paddingBottom: 8 }}>
+          <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#333', marginBottom: 4 }}>Bus Status Legend:</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 16 }}>
+              <View style={{ width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginRight: 8, borderWidth: 2, borderColor: '#fff', backgroundColor: '#0d6efd' }}>
+                <Text style={{ fontSize: 14 }}>🚌</Text>
               </View>
-              <Text style={styles.legendText}>Active</Text>
+              <Text style={{ fontSize: 12, color: '#666', fontWeight: '600' }}>Active</Text>
             </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.busMarker, { backgroundColor: '#6c757d', width: 20, height: 20 }]}>
-                <Text style={[styles.busIcon, { fontSize: 12 }]}>🚌</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 16 }}>
+              <View style={{ width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginRight: 8, borderWidth: 2, borderColor: '#fff', backgroundColor: '#6c757d' }}>
+                <Text style={{ fontSize: 14 }}>🚌</Text>
               </View>
-              <Text style={styles.legendText}>Last Known</Text>
+              <Text style={{ fontSize: 12, color: '#666', fontWeight: '600' }}>Last Known</Text>
             </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.busMarker, { backgroundColor: '#dc3545', width: 20, height: 20 }]}>
-                <Text style={[styles.busIcon, { fontSize: 12 }]}>🚌</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 16 }}>
+              <View style={{ width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginRight: 8, borderWidth: 2, borderColor: '#fff', backgroundColor: '#dc3545' }}>
+                <Text style={{ fontSize: 14 }}>🚌</Text>
               </View>
-              <Text style={styles.legendText}>Alert</Text>
+              <Text style={{ fontSize: 12, color: '#666', fontWeight: '600' }}>Alert</Text>
             </View>
           </ScrollView>
         </View>
@@ -335,6 +324,7 @@ const LiveMonitoring = () => {
 
       <View style={styles.mapWrap}>
         <MapView
+          provider={PROVIDER_GOOGLE}
           ref={(ref) => setMapRef(ref)}
           style={styles.map}
           initialRegion={getInitialRegion()}
@@ -446,43 +436,29 @@ const LiveMonitoring = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f0f2f5',
-    paddingTop: Platform.OS === 'android' ? 30 : 0, // Add padding for Android status bar
+    backgroundColor: '#F8F9FA',
+    paddingTop: Platform.OS === 'android' ? 30 : 0,
   },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, paddingHorizontal: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee' },
-  backButton: { 
-    paddingHorizontal: 10, 
-    paddingVertical: 6, 
-    backgroundColor: '#f1f3f5', 
-    borderRadius: 6, 
-    marginRight: 8 
-  },
-  backButtonText: { fontSize: 18, color: '#333', fontWeight: '700' },
-  title: { fontSize: 20, fontWeight: '700', color: '#333' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, paddingHorizontal: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#EEE' },
+  title: { fontSize: 18, fontWeight: '700', color: '#1F2937' },
   headerRight: { flexDirection: 'row', alignItems: 'center' },
   refreshButton: { 
     marginRight: 10, 
     paddingHorizontal: 12, 
     paddingVertical: 6, 
-    backgroundColor: '#007bff', 
+    backgroundColor: '#F59E0B', 
     borderRadius: 6 
   },
   refreshButtonDisabled: { backgroundColor: '#6c757d' },
   refreshButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   status: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
   statusText: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
-  filters: { padding: 12, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee' },
-  filterBtn: { paddingHorizontal: 14, paddingVertical: 8, backgroundColor: '#f8f9fa', borderWidth: 1, borderColor: '#dee2e6', borderRadius: 18, marginRight: 10 },
-  activeFilter: { backgroundColor: '#007bff', borderColor: '#007bff' },
-  filterText: { color: '#6c757d' },
-  activeFilterText: { color: '#fff' },
+  filters: { padding: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#EEE' },
+  filterBtn: { paddingHorizontal: 14, paddingVertical: 8, backgroundColor: '#F8F9FA', borderWidth: 1, borderColor: '#DEE2E6', borderRadius: 18, marginRight: 10 },
+  activeFilter: { backgroundColor: '#F59E0B', borderColor: '#F59E0B' },
+  filterText: { color: '#6C757D' },
+  activeFilterText: { color: '#FFFFFF' },
   debugText: { fontSize: 12, color: '#666', paddingHorizontal: 12, paddingBottom: 8 },
-  legendContainer: { paddingHorizontal: 12, paddingBottom: 8 },
-  legendTitle: { fontSize: 12, fontWeight: 'bold', color: '#333', marginBottom: 4 },
-  legendScroll: { flexDirection: 'row' },
-  legendItem: { flexDirection: 'row', alignItems: 'center', marginRight: 12 },
-  legendColor: { width: 12, height: 12, borderRadius: 2, marginRight: 4 },
-  legendText: { fontSize: 10, color: '#666' },
   busMarker: {
     width: 40,
     height: 40,
@@ -516,7 +492,7 @@ const styles = StyleSheet.create({
   alertIcon: {
     fontSize: 12,
   },
-  mapWrap: { flex: 1, margin: 16, borderRadius: 10, overflow: 'hidden', backgroundColor: '#ddd' },
+  mapWrap: { flex: 1, margin: 16, borderRadius: 10, overflow: 'hidden', backgroundColor: '#DDD' },
   map: { flex: 1 },
 });
 

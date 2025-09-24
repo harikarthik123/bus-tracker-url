@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TextInput, TouchableOpacity, FlatList, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useOnline } from '../utils/useOnline';
 import { useAdminI18n } from '../utils/i18n';
 import { Picker } from '@react-native-picker/picker';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as DocumentPicker from 'expo-document-picker';
+import { enqueueRequest } from '../utils/outbox';
 
-const API_URL = 'https://bus-tracker-url.onrender.com/api/admin'; // Base API URL for admin management
+const API_URL = 'http://192.168.137.1:5000/api/admin'; // Base API URL for admin management
 
 type Driver = {
   _id: string;
@@ -32,6 +35,7 @@ type Bus = {
 const BusManagement = () => {
   const router = useRouter();
   const { t } = useAdminI18n();
+  const online = useOnline();
   const [buses, setBuses] = useState<Bus[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [routes, setRoutes] = useState<RouteType[]>([]);
@@ -41,6 +45,8 @@ const BusManagement = () => {
   const [driverId, setDriverId] = useState('');
   const [routeId, setRouteId] = useState('');
   const [editingBusId, setEditingBusId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     fetchBuses();
@@ -86,6 +92,24 @@ const BusManagement = () => {
     }
   };
 
+  const handleUploadCsv = async () => {
+    try {
+      const pick = await DocumentPicker.getDocumentAsync({ type: 'text/csv' });
+      if (pick.canceled || !pick.assets?.[0]) return;
+      const file = pick.assets[0];
+      const token = await AsyncStorage.getItem('token');
+      const form = new FormData();
+      // @ts-ignore
+      form.append('file', { uri: file.uri, name: file.name || 'buses.csv', type: 'text/csv' });
+      await axios.post(`${API_URL}/buses/bulk`, form, { headers: { 'x-auth-token': token, 'Content-Type': 'multipart/form-data' } });
+      Alert.alert('Success', 'Buses uploaded.');
+      fetchBuses();
+    } catch (e) {
+      console.error('Upload buses CSV error', e);
+      Alert.alert('Error', 'Upload failed. Ensure required columns are present.');
+    }
+  };
+
   const handleAddBus = async () => {
     if (!busNumber || !regNo || !capacity) {
       Alert.alert('Error', 'Please fill in bus number, reg. no and capacity.');
@@ -93,15 +117,11 @@ const BusManagement = () => {
     }
     try {
       const token = await AsyncStorage.getItem('token');
-      const response = await axios.post(`${API_URL}/buses`, {
-        busNumber,
-        regNo,
-        capacity: parseInt(capacity),
-        driver: driverId || null,
-        route: routeId || null,
-      }, { headers: { 'x-auth-token': token } });
-
-      setBuses((prev: Bus[]) => [...prev, response.data.bus as Bus]);
+      const payload = { busNumber, regNo, capacity: parseInt(capacity), driver: driverId || null, route: routeId || null };
+      const temp: Bus = { _id: `temp-${Date.now()}`, busNumber, regNo, capacity: parseInt(capacity), driver: driverId || null, route: routeId || null, syncStatus: 'pending' } as any;
+      setBuses((prev: Bus[]) => [...prev, temp]);
+      await enqueueRequest({ url: `${API_URL}/buses`, method: 'post', data: payload, headers: { 'x-auth-token': token || '' } });
+      fetchBuses();
       setBusNumber('');
       setRegNo('');
       setCapacity('');
@@ -110,7 +130,7 @@ const BusManagement = () => {
       Alert.alert('Success', 'Bus created successfully!');
     } catch (error) {
       console.error('Error creating bus:', error);
-      Alert.alert('Error', 'Failed to create bus.');
+      Alert.alert('Error', 'Failed to create bus. Stored offline if applicable.');
     }
   };
 
@@ -132,15 +152,10 @@ const BusManagement = () => {
     }
     try {
       const token = await AsyncStorage.getItem('token');
-      const response = await axios.put(`${API_URL}/buses/${editingBusId}`, {
-        busNumber,
-        regNo,
-        capacity: parseInt(capacity),
-        driver: driverId || null,
-        route: routeId || null,
-      }, { headers: { 'x-auth-token': token } });
-
-      setBuses((prev: Bus[]) => prev.map((b) => (b._id === (editingBusId as string) ? (response.data.bus as Bus) : b)));
+      const payload = { busNumber, regNo, capacity: parseInt(capacity), driver: driverId || null, route: routeId || null };
+      setBuses((prev: Bus[]) => prev.map((b) => (b._id === (editingBusId as string) ? ({ ...b, ...payload, syncStatus: 'pending' }) as Bus : b)));
+      await enqueueRequest({ url: `${API_URL}/buses/${editingBusId}`, method: 'put', data: payload, headers: { 'x-auth-token': token || '' } });
+      fetchBuses();
       setBusNumber('');
       setRegNo('');
       setCapacity('');
@@ -150,7 +165,7 @@ const BusManagement = () => {
       Alert.alert('Success', 'Bus updated successfully!');
     } catch (error) {
       console.error('Error updating bus:', error);
-      Alert.alert('Error', 'Failed to update bus.');
+      Alert.alert('Error', 'Failed to update bus. Stored offline if applicable.');
     }
 
     setBusNumber('');
@@ -171,11 +186,11 @@ const BusManagement = () => {
           onPress: async () => {
             try {
               const token = await AsyncStorage.getItem('token');
-              await axios.delete(`${API_URL}/buses/${id}`, { headers: { 'x-auth-token': token } });
               setBuses((prev: Bus[]) => prev.filter((b) => b._id !== id));
+              await enqueueRequest({ url: `${API_URL}/buses/${id}`, method: 'delete', headers: { 'x-auth-token': token || '' } });
             } catch (err) {
               console.error('Error deleting bus:', err);
-              Alert.alert('Error', 'Failed to delete bus.');
+              Alert.alert('Error', 'Failed to delete bus. Stored offline if applicable.');
             }
           },
           style: 'destructive',
@@ -282,8 +297,30 @@ const BusManagement = () => {
         </View>
 
         <Text style={styles.listTitle}>Existing Buses</Text>
+        <View style={styles.uploadBox}>
+          <Text style={styles.uploadTitle}>File Upload (CSV/XLSX)</Text>
+          <Text style={styles.uploadHint}>Required: busNumber, reg_no, capacity. Optional: route_id/route_name, driverId</Text>
+          <TouchableOpacity style={[styles.actionButton, styles.createButton]} onPress={handleUploadCsv}>
+            <Text style={styles.buttonText}>Upload CSV</Text>
+          </TouchableOpacity>
+        </View>
+        <TextInput
+          style={styles.input}
+          placeholder={"Search by bus number or reg no"}
+          value={searchQuery}
+          onChangeText={(v) => { setSearchQuery(v); if (v) setShowAll(false); }}
+          autoCapitalize="none"
+        />
+        {(!searchQuery && !showAll) ? (
+          <View style={{ width: '100%', marginBottom: 10 }}>
+            <TouchableOpacity style={[styles.actionButton, styles.updateButton]} onPress={() => setShowAll(true)}>
+              <Text style={styles.buttonText}>View All</Text>
+            </TouchableOpacity>
+            <Text style={{ color: '#6b7280', marginTop: 8, textAlign: 'center' }}>Search buses or tap View All.</Text>
+          </View>
+        ) : null}
         <FlatList
-          data={buses}
+          data={(searchQuery ? buses.filter(b => (b.busNumber||'').toLowerCase().includes(searchQuery.toLowerCase()) || (b.regNo||'').toLowerCase().includes(searchQuery.toLowerCase())) : (showAll ? buses : []))}
           renderItem={renderBusItem}
           keyExtractor={(item) => item._id.toString()}
           ListEmptyComponent={<Text>No buses added yet.</Text>}
@@ -298,7 +335,7 @@ const BusManagement = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f0f2f5',
+    backgroundColor: '#F8F9FA',
   },
   header: {
     width: '100%',
@@ -315,7 +352,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 6,
-    backgroundColor: '#007bff',
+    backgroundColor: '#F59E0B',
     marginHorizontal: 4,
     elevation: 2,
   },
@@ -375,7 +412,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   createButton: {
-    backgroundColor: '#28a745',
+    backgroundColor: '#F59E0B',
   },
   updateButton: {
     backgroundColor: '#007bff',
@@ -431,6 +468,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 5,
     marginLeft: 10,
+  },
+  uploadBox: {
+    width: '100%',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  uploadTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  uploadHint: {
+    color: '#6b7280',
+    marginBottom: 10,
   },
 });
 

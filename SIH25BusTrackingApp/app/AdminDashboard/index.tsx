@@ -1,9 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, SafeAreaView, StatusBar, ScrollView } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, SafeAreaView, StatusBar, ScrollView, Animated, Easing } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAdminI18n, setAdminLanguage } from '../utils/i18n';
+import FloatingAssistant from '../../components/FloatingAssistant';
+import LiveMonitoring from './LiveMonitoring';
 
 const CARD_COLORS = {
 	live: '#0d6efd',
@@ -22,8 +24,13 @@ const LANG_OPTIONS = [
 ];
 
 const AdminDashboard = () => {
-	const { t, lang, setLang } = useAdminI18n();
+    const { t, lang, setLang } = useAdminI18n();
 	const [langMenuOpen, setLangMenuOpen] = useState(false);
+	const [langDropdownOpen, setLangDropdownOpen] = useState(false);
+    const SCREEN_WIDTH = Dimensions.get('window').width;
+    const DRAWER_WIDTH = Math.min(SCREEN_WIDTH * 0.85, 360);
+    const spacing = Math.max(10, Math.min(18, Math.round(SCREEN_WIDTH * 0.04)));
+    const drawerTranslateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
 
 	const CARD_DATA = useMemo(() => ([
 		{ key: 'live', title: t('cards.live.title'), sub: t('cards.live.sub'), route: '/AdminDashboard/LiveMonitoring', icon: '📡', color: CARD_COLORS.live },
@@ -47,69 +54,98 @@ const AdminDashboard = () => {
 		}
 	};
 
-	return (
-		<SafeAreaView style={styles.safeArea}>
-			<StatusBar barStyle="light-content" />
-			<LinearGradient
-				colors={["#198754", "#0d6efd"]}
-				start={{ x: 0, y: 0 }}
-				end={{ x: 1, y: 0 }}
-				style={styles.headerGradient}
-			>
-				<View style={styles.headerContent}>
-					<View style={styles.headerLeft}>
-						<Text style={styles.brand}>BusBee</Text>
-						<Text style={styles.welcome}>{t('admin.welcome')}</Text>
-					</View>
-					<View style={styles.rightControls}>
-						<TouchableOpacity
-							activeOpacity={0.9}
-							style={[styles.langDropdown, langMenuOpen && styles.langDropdownActive]}
-							onPress={() => setLangMenuOpen((v) => !v)}
-						>
-							<Text style={styles.langDropdownText}>{LANG_OPTIONS.find(l => l.code === lang)?.label} ▾</Text>
-						</TouchableOpacity>
-						<TouchableOpacity style={styles.logoutButton} onPress={async () => {
-							try { await AsyncStorage.removeItem('token'); router.replace('/LoginScreen'); } catch {}
-						}}>
-							<Text style={styles.logoutText}>{/* keep label English for clarity */}Logout</Text>
-						</TouchableOpacity>
-					</View>
-				</View>
-				{/* Popover moved outside header to allow full-screen backdrop */}
-			</LinearGradient>
-			{langMenuOpen && (
-				<>
-					<TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={() => setLangMenuOpen(false)} />
-					<View style={styles.langMenuPopover}>
-						{LANG_OPTIONS.map((opt) => (
-							<TouchableOpacity key={opt.code} style={[styles.langMenuItem, lang === opt.code && styles.langMenuItemActive]} onPress={() => selectLanguage(opt.code as any)}>
-								<Text style={styles.langMenuItemText}>{opt.label}</Text>
-							</TouchableOpacity>
-						))}
-					</View>
-				</>
-			)}
-			<ScrollView contentContainerStyle={styles.scroll}>
-				<View style={styles.grid}>
-					{CARD_DATA.map((card) => (
-						<TouchableOpacity
-							key={card.title}
-							style={styles.card}
-							activeOpacity={0.9}
-							onPress={() => router.push(card.route)}
-						>
-							<View style={[styles.iconCircle, { backgroundColor: card.color }]}>
-								<Text style={styles.iconEmoji}>{card.icon}</Text>
-							</View>
-							<Text style={styles.cardTitle}>{card.title}</Text>
-							<Text style={styles.cardSub}>{card.sub}</Text>
-						</TouchableOpacity>
-					))}
-				</View>
-			</ScrollView>
-		</SafeAreaView>
-	);
+    const cardsOpacity = useRef(new Animated.Value(0)).current;
+    const cardsTranslate = useRef(new Animated.Value(24)).current;
+    useEffect(() => {
+        Animated.parallel([
+            Animated.timing(cardsOpacity, { toValue: 1, duration: 450, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+            Animated.timing(cardsTranslate, { toValue: 0, duration: 450, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        ]).start();
+    }, []);
+
+    useEffect(() => {
+        Animated.timing(drawerTranslateX, {
+            toValue: langMenuOpen ? 0 : -DRAWER_WIDTH,
+            duration: 280,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+        }).start();
+    }, [langMenuOpen]);
+
+    return (
+        <SafeAreaView style={styles.safeArea}>
+            <StatusBar barStyle="light-content" />
+            <LinearGradient colors={["#F59E0B", "#FDE68A"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingVertical: Math.round(spacing * 0.8) }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing }}>
+                    <TouchableOpacity onPress={() => setLangMenuOpen((v) => !v)} style={styles.hamburger}>
+                        <Text style={styles.hamburgerText}>☰</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Admin Dashboard</Text>
+                    <TouchableOpacity style={styles.langPill} onPress={() => setLangDropdownOpen(v => !v)}><Text style={styles.langPillText}>{LANG_OPTIONS.find(l => l.code === lang)?.label} ▾</Text></TouchableOpacity>
+                </View>
+            </LinearGradient>
+
+            {langDropdownOpen && (
+                <>
+                  <TouchableOpacity style={styles.langBackdrop} activeOpacity={1} onPress={() => setLangDropdownOpen(false)} />
+                  <View style={styles.langDropdown}>
+                    {LANG_OPTIONS.map(opt => (
+                      <TouchableOpacity key={opt.code} style={styles.langOption} onPress={() => { selectLanguage(opt.code as any); setLangDropdownOpen(false); }}>
+                        <Text style={[styles.langOptionText, opt.code === lang && { fontWeight: '800' }]}>{opt.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+            )}
+
+            {langMenuOpen && (
+                <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={() => setLangMenuOpen(false)} />
+            )}
+            <Animated.View pointerEvents={langMenuOpen ? 'auto' : 'none'} style={[styles.drawer, { width: DRAWER_WIDTH, transform: [{ translateX: drawerTranslateX }] }]}>
+                <View style={styles.drawerHeaderBar}>
+                    <Text style={styles.drawerHeaderTitle}>Admin Menu</Text>
+                    <TouchableOpacity onPress={() => setLangMenuOpen(false)}>
+                        <Text style={styles.drawerClose}>✕</Text>
+                    </TouchableOpacity>
+                </View>
+                <View style={[styles.drawerInnerWrap, { paddingBottom: spacing }]}>
+                    <View style={[styles.drawerCard, { margin: spacing, padding: Math.max(10, Math.round(spacing * 0.8)) }]}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8 }}>
+                            {LANG_OPTIONS.map(opt => (
+                                <TouchableOpacity key={opt.code} style={{ paddingVertical: 6, paddingHorizontal: 10, borderRadius: 18, backgroundColor: opt.code === lang ? '#F59E0B' : '#F1F5F9', marginLeft: 6 }} onPress={() => selectLanguage(opt.code as any)}>
+                                    <Text style={{ fontWeight: '700', color: opt.code === lang ? '#1F2937' : '#1F2937', fontSize: 12 }}>{opt.label}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                        {CARD_DATA.filter(c => c.key !== 'live').map((card) => (
+                            <TouchableOpacity key={card.key} style={[styles.drawerItem, { marginBottom: Math.round(spacing * 0.75) }]} onPress={() => { setLangMenuOpen(false); router.push(card.route as any); }}>
+                                <Text style={styles.drawerItemIcon}>{card.icon}</Text>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.drawerItemText}>{card.title}</Text>
+                                    {card.sub ? <Text style={styles.drawerItemSub}>{card.sub}</Text> : null}
+                                </View>
+                            </TouchableOpacity>
+                        ))}
+                        <TouchableOpacity style={styles.drawerLogout} onPress={async () => { try { await AsyncStorage.removeItem('token'); router.replace('/LoginScreen'); } catch {} }}>
+                            <Text style={styles.drawerLogoutIcon}>↩︎</Text>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.drawerLogoutText}>Logout</Text>
+                                <Text style={styles.drawerLogoutSub}>Sign out of admin panel</Text>
+                            </View>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Animated.View>
+
+            <View style={styles.content}>
+                <LiveMonitoring showHeader={false} />
+            </View>
+
+            <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 }}>
+                <FloatingAssistant role="admin" />
+            </View>
+        </SafeAreaView>
+    );
 };
 
 const CARD_WIDTH = (Dimensions.get('window').width - 60) / 2;
@@ -117,145 +153,34 @@ const CARD_WIDTH = (Dimensions.get('window').width - 60) / 2;
 const styles = StyleSheet.create({
 	safeArea: {
 		flex: 1,
-			backgroundColor: '#f8f9fa',
+    backgroundColor: '#F8F9FA',
 	},
-	headerGradient: {
-			paddingTop: 18,
-			paddingBottom: 18,
-			paddingHorizontal: 20,
-	},
-	headerContent: {
-			flexDirection: 'row',
-			alignItems: 'center',
-			justifyContent: 'space-between',
-	},
-	headerLeft: {
-			flex: 1,
-	},
-	brand: {
-			fontSize: 22,
-			fontWeight: 'bold',
-			color: '#ffffff',
-	},
-	welcome: {
-			marginTop: 2,
-			fontSize: 14,
-			color: '#ffffff',
-			opacity: 0.9,
-	},
-	rightControls: {
-			flexDirection: 'row',
-			alignItems: 'center',
-			gap: 10,
-	},
-	langDropdown: {
-			backgroundColor: 'rgba(255,255,255,0.25)',
-			borderRadius: 16,
-			paddingHorizontal: 12,
-			paddingVertical: 6,
-	},
-	langDropdownActive: {
-			backgroundColor: 'rgba(255,255,255,0.35)',
-	},
-	langDropdownText: {
-			color: '#ffffff',
-			fontWeight: '600',
-			fontSize: 12,
-	},
-	langMenuPopover: {
-			position: 'absolute',
-			right: 20,
-			top: 70,
-			backgroundColor: 'rgba(255,255,255,0.95)',
-			borderRadius: 12,
-			paddingVertical: 6,
-			minWidth: 160,
-			shadowColor: '#000',
-			shadowOffset: { width: 0, height: 4 },
-			shadowOpacity: 0.15,
-			shadowRadius: 10,
-			elevation: 8,
-			zIndex: 1001,
-	},
-	backdrop: {
-			position: 'absolute',
-			top: 0,
-			left: 0,
-			right: 0,
-			bottom: 0,
-			backgroundColor: 'transparent',
-			zIndex: 1000,
-	},
-	langMenuItem: {
-			paddingVertical: 10,
-			paddingHorizontal: 14,
-	},
-	langMenuItemActive: {
-			backgroundColor: 'rgba(13,110,253,0.08)'
-	},
-	langMenuItemText: {
-			color: '#1f2d3d',
-			fontSize: 14,
-			fontWeight: '600',
-	},
-	logoutButton: {
-			backgroundColor: '#dc3545',
-			paddingHorizontal: 12,
-			paddingVertical: 6,
-			borderRadius: 16,
-	},
-	logoutText: {
-			color: '#ffffff',
-			fontWeight: '600',
-			fontSize: 12,
-	},
-	scroll: {
-			paddingHorizontal: 16,
-			paddingTop: 16,
-			paddingBottom: 10,
-	},
-	grid: {
-			flexDirection: 'row',
-			flexWrap: 'wrap',
-			justifyContent: 'space-between',
-			alignItems: 'flex-start',
-	},
-	card: {
-			width: CARD_WIDTH,
-			backgroundColor: '#ffffff',
-			borderRadius: 16,
-			padding: 16,
-			marginBottom: 16,
-			shadowColor: '#000',
-			shadowOffset: { width: 0, height: 2 },
-			shadowOpacity: 0.08,
-			shadowRadius: 6,
-			elevation: 2,
-	},
-	iconCircle: {
-			width: 52,
-			height: 52,
-			borderRadius: 12,
-			justifyContent: 'center',
-			alignItems: 'center',
-			marginBottom: 12,
-	},
-	iconEmoji: {
-			fontSize: 24,
-			color: '#ffffff',
-	},
-	cardTitle: {
-			fontSize: 16,
-			fontWeight: '600',
-			color: '#1f2d3d',
-			marginBottom: 6,
-			textAlign: 'center',
-	},
-	cardSub: {
-			fontSize: 12,
-			color: '#6c757d',
-			textAlign: 'center',
-	},
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#EEE' },
+	hamburger: { padding: 8, backgroundColor: '#F59E0B', borderRadius: 8 },
+  hamburgerText: { color: '#1F2937', fontSize: 18, fontWeight: '800' },
+  headerTitle: { color: '#1F2937', fontSize: 18, fontWeight: '800' },
+  langPill: { backgroundColor: 'rgba(255,255,255,0.5)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14 },
+  langPillText: { color: '#1F2937', fontWeight: '700', fontSize: 12 },
+	backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.35)', zIndex: 1000 },
+	drawer: { position: 'absolute', top: 0, bottom: 0, left: 0, backgroundColor: 'transparent', zIndex: 1001, elevation: 8 },
+	drawerHeaderBar: { height: 56, backgroundColor: '#F59E0B', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
+	drawerHeaderTitle: { color: '#1F2937', fontSize: 18, fontWeight: '800' },
+	drawerClose: { color: '#1F2937', fontSize: 18, fontWeight: '800' },
+    drawerInnerWrap: { flex: 1, backgroundColor: '#FFFFFF' },
+	drawerCard: { margin: 12, backgroundColor: '#FFFFFF', borderRadius: 12, padding: 12 },
+	drawerItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 14, backgroundColor: '#F8F9FA', borderRadius: 12, marginBottom: 12 },
+	drawerItemIcon: { width: 28, textAlign: 'center', marginRight: 10 },
+	drawerItemText: { color: '#1F2937', fontSize: 15, fontWeight: '700' },
+	drawerItemSub: { color: '#6C757D', fontSize: 12, marginTop: 2 },
+	drawerLogout: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#dc3545', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 14, marginTop: 8 },
+	drawerLogoutIcon: { width: 28, textAlign: 'center', marginRight: 10, color: '#fff' },
+	drawerLogoutText: { color: '#fff', fontWeight: '800' },
+	drawerLogoutSub: { color: '#fff', opacity: 0.9, fontSize: 12 },
+	content: { flex: 1 },
+  langBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  langDropdown: { position: 'absolute', top: 54, right: 12, backgroundColor: '#FFFFFF', borderRadius: 10, paddingVertical: 6, minWidth: 140, borderColor: '#E5E7EB', borderWidth: 1, zIndex: 999 },
+  langOption: { paddingHorizontal: 12, paddingVertical: 8 },
+  langOptionText: { color: '#1F2937', fontSize: 14 },
 });
 
 export default AdminDashboard;

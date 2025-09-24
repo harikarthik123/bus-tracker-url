@@ -4,7 +4,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 
-const API_URL = 'https://bus-tracker-url.onrender.com/api/auth'; // Update with your API URL
+const API_URL = 'http://192.168.137.1:5000/api/auth'; // Update with your API URL
 
 const PassengerLogin = () => {
   const router = useRouter();
@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     padding: 20,
-    backgroundColor: '#f7f9fa',
+    backgroundColor: '#FFFBEB', // Orange-tinted background
   },
   title: {
     fontSize: 28,
@@ -71,7 +71,7 @@ const styles = StyleSheet.create({
   },
   input: {
     height: 50,
-    borderColor: '#d1d5db',
+    borderColor: '#F59E0B', // Orange border
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 15,
@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   button: {
-    backgroundColor: '#007bff',
+    backgroundColor: '#D97706', // Orange button
     borderRadius: 8,
     paddingVertical: 15,
     alignItems: 'center',
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
   },
   registerText: {
     marginTop: 15,
-    color: '#007bff',
+    color: '#D97706', // Orange text
     textAlign: 'center',
   },
 });

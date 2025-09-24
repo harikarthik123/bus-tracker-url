@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Switch, Alert, ScrollView, Platform, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Switch, Alert, ScrollView, Platform, SafeAreaView, StatusBar, Animated, Easing } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import axios from 'axios';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useDriverI18n } from './utils/i18n';
+import { useOnline } from './utils/useOnline';
 // Assuming your backend is running on http://bus-tracker-url.onrender.com
-const API_URL = 'https://bus-tracker-url.onrender.com/api/driver'; 
+const API_URL = 'http://192.168.137.1:5000/api/driver'; 
 const DriverDashboard = () => {
   const router = useRouter();
+  const { t, lang, setLang } = useDriverI18n();
+  const online = useOnline();
   const [assignedBus, setAssignedBus] = useState<any>(null);
   const [assignedRoute, setAssignedRoute] = useState<any>(null);
   const [isGpsTrackingEnabled, setIsGpsTrackingEnabled] = useState(false);
@@ -181,40 +186,61 @@ const DriverDashboard = () => {
       console.error('Error logging out:', err);
     }
   };
-  return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerTitle}>
-          <Text style={styles.title}>Driver Dashboard</Text>
-          <Text style={styles.subtitle}>Fleet Management</Text>
-        </View>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutIcon}>🚪</Text>
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
-      </View>
+  const headerOpacity = React.useRef(new Animated.Value(0)).current;
+  const contentTranslate = React.useRef(new Animated.Value(24)).current;
+  React.useEffect(() => {
+    Animated.parallel([
+      Animated.timing(headerOpacity, { toValue: 1, duration: 450, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(contentTranslate, { toValue: 0, duration: 450, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]).start();
+  }, []);
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" />
+      <LinearGradient
+        colors={["#F59E0B", "#FDE68A"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.headerGradient}
+      >
+        <Animated.View style={[styles.headerRow, { opacity: headerOpacity }] }>
+          <View style={styles.headerLeft}>
+            <Text style={styles.brand}>BusBee</Text>
+            <Text style={styles.welcome}>{t('driver.header.title')}</Text>
+            <Text style={styles.subtitleHeader}>{t('driver.header.sub')}</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={{ backgroundColor: online ? '#16a34a' : '#dc2626', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, marginRight: 8 }}>
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 10 }}>{online ? 'Online' : 'Offline'}</Text>
+            </View>
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+              <Text style={styles.logoutText}>Logout</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </LinearGradient>
+
+      <Animated.ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { transform: [{ translateY: contentTranslate }] }]}>
         {/* Bus Information Card */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <View style={styles.cardIconContainer}>
               <Text style={styles.cardIcon}>🚌</Text>
             </View>
-            <Text style={styles.cardTitle}>Assigned Vehicle</Text>
+            <Text style={styles.cardTitle}>{t('driver.assigned.title')}</Text>
           </View>
           <View style={styles.cardContent}>
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Bus Number:</Text>
+              <Text style={styles.infoLabel}>{t('driver.labels.busNumber')}</Text>
               <Text style={styles.infoValue}>{assignedBus ? assignedBus.busNumber : 'N/A'}</Text>
             </View>
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Registration:</Text>
+              <Text style={styles.infoLabel}>{t('driver.labels.registration')}</Text>
               <Text style={styles.infoValue}>{assignedBus ? assignedBus.regNo : 'N/A'}</Text>
             </View>
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Route:</Text>
+              <Text style={styles.infoLabel}>{t('driver.labels.route')}</Text>
               <Text style={styles.infoValue}>{assignedRoute ? assignedRoute.name : 'N/A'}</Text>
             </View>
           </View>
@@ -223,30 +249,30 @@ const DriverDashboard = () => {
         {/* GPS Tracking Card */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <View style={[styles.cardIconContainer, { backgroundColor: isGpsTrackingEnabled ? '#28a745' : '#6c757d' }]}>
+            <View style={[styles.cardIconContainer, { backgroundColor: isGpsTrackingEnabled ? '#16A34A' : '#9CA3AF' }]}>
               <Text style={styles.cardIcon}>📍</Text>
             </View>
-            <Text style={styles.cardTitle}>Live Tracking</Text>
+            <Text style={styles.cardTitle}>{t('driver.live.title')}</Text>
           </View>
           <View style={styles.cardContent}>
             <View style={styles.toggleContainer}>
               <View style={styles.toggleInfo}>
-                <Text style={styles.toggleLabel}>GPS Location Tracking</Text>
+                <Text style={styles.toggleLabel}>{t('driver.live.toggle')}</Text>
                 <Text style={styles.toggleDescription}>
-                  {isGpsTrackingEnabled ? 'Your location is being tracked' : 'Location tracking is disabled'}
+                  {isGpsTrackingEnabled ? t('driver.live.on') : t('driver.live.off')}
                 </Text>
               </View>
               <Switch
                 onValueChange={setIsGpsTrackingEnabled}
                 value={isGpsTrackingEnabled}
-                trackColor={{ false: '#767577', true: '#28a745' }}
+                trackColor={{ false: '#D1D5DB', true: '#F59E0B' }}
                 thumbColor={isGpsTrackingEnabled ? '#fff' : '#f4f3f4'}
               />
             </View>
             {isGpsTrackingEnabled && (
               <View style={styles.statusIndicator}>
                 <View style={styles.statusDot} />
-                <Text style={styles.statusText}>Active</Text>
+                <Text style={styles.statusText}>{t('driver.status.active')}</Text>
               </View>
             )}
           </View>
@@ -255,10 +281,10 @@ const DriverDashboard = () => {
         {/* Alerts Card */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <View style={[styles.cardIconContainer, { backgroundColor: driverAlerts.length > 0 ? '#dc3545' : '#28a745' }]}>
+            <View style={[styles.cardIconContainer, { backgroundColor: driverAlerts.length > 0 ? '#DC2626' : '#16A34A' }]}>
               <Text style={styles.cardIcon}>🚨</Text>
             </View>
-            <Text style={styles.cardTitle}>Active Alerts</Text>
+            <Text style={styles.cardTitle}>{t('driver.alerts.title')}</Text>
           </View>
           <View style={styles.cardContent}>
             {driverAlerts.length > 0 ? (
@@ -282,13 +308,13 @@ const DriverDashboard = () => {
             ) : (
               <View style={styles.noAlertsContainer}>
                 <Text style={styles.noAlertsIcon}>✅</Text>
-                <Text style={styles.noAlertsText}>No active alerts</Text>
-                <Text style={styles.noAlertsSubtext}>All systems operating normally</Text>
+                <Text style={styles.noAlertsText}>{t('driver.alerts.none.title')}</Text>
+                <Text style={styles.noAlertsSubtext}>{t('driver.alerts.none.sub')}</Text>
               </View>
             )}
           </View>
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
     </SafeAreaView>
   );
 };
@@ -297,97 +323,97 @@ const styles = StyleSheet.create({
   // Layout
   safeArea: {
     flex: 1,
-    backgroundColor: '#f0f2f5',
-    paddingTop: Platform.OS === 'android' ? 30 : 0,
-  },
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f0f2f5',
+    backgroundColor: '#FFFBEB',
   },
   scrollView: {
     width: '100%',
-    marginTop: 100,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
   },
-  
-  // Header
-  header: {
-    position: 'absolute',
-    top: 50,
-    left: 20,
-    right: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  scrollContent: {
+    paddingTop: 16,
+    paddingBottom: 16,
     alignItems: 'center',
   },
-  headerTitle: {
+  
+  // Header (gradient)
+  headerGradient: {
+    paddingTop: 18,
+    paddingBottom: 18,
+    paddingHorizontal: 20,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerLeft: {
     flex: 1,
   },
-  title: {
-    fontSize: 24,
+  brand: {
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#2c3e50',
+    color: '#1F2937',
   },
-  subtitle: {
-    fontSize: 14,
-    color: '#7f8c8d',
+  welcome: {
     marginTop: 2,
+    fontSize: 16,
+    color: '#1F2937',
+  },
+  subtitleHeader: {
+    fontSize: 12,
+    color: '#374151',
+    opacity: 0.9,
   },
   
   // Logout Button
   logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#e74c3c',
-    paddingVertical: 8,
+    backgroundColor: '#DC2626',
     paddingHorizontal: 12,
-    borderRadius: 6,
-  },
-  logoutIcon: {
-    fontSize: 18,
-    marginRight: 5,
+    paddingVertical: 6,
+    borderRadius: 16,
   },
   logoutText: {
-    color: '#fff',
-    fontWeight: 'bold',
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 12,
   },
   
   // Card
   card: {
     backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 15,
-    width: '90%',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    width: '92%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: 12,
   },
   cardIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#3498db',
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#F59E0B',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
   cardIcon: {
-    fontSize: 20,
+    fontSize: 22,
   },
   cardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#2c3e50',
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2d3d',
   },
   cardContent: {
     paddingHorizontal: 5,
@@ -398,18 +424,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#F1F5F9',
   },
   infoLabel: {
     fontSize: 14,
-    color: '#7f8c8d',
+    color: '#6c757d',
     fontWeight: '500',
   },
   infoValue: {
     fontSize: 14,
-    color: '#2c3e50',
+    color: '#1f2d3d',
     fontWeight: '600',
   },
   
@@ -427,12 +453,12 @@ const styles = StyleSheet.create({
   toggleLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#2c3e50',
+    color: '#1f2d3d',
     marginBottom: 4,
   },
   toggleDescription: {
     fontSize: 13,
-    color: '#7f8c8d',
+    color: '#6c757d',
   },
   
   // Status Indicator
@@ -441,7 +467,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 10,
     padding: 8,
-    backgroundColor: '#e8f5e9',
+    backgroundColor: '#FEF3C7',
     borderRadius: 6,
     alignSelf: 'flex-start',
   },
@@ -449,11 +475,11 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#28a745',
+    backgroundColor: '#F59E0B',
     marginRight: 8,
   },
   statusText: {
-    color: '#28a745',
+    color: '#B45309',
     fontWeight: '600',
   },
   
@@ -462,12 +488,12 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   alertItem: {
-    backgroundColor: '#fff8e1',
+    backgroundColor: '#FFFBEB',
     borderRadius: 8,
     padding: 12,
     marginBottom: 10,
     borderLeftWidth: 4,
-    borderLeftColor: '#ffc107',
+    borderLeftColor: '#F59E0B',
   },
   alertContent: {
     marginBottom: 8,
@@ -485,16 +511,16 @@ const styles = StyleSheet.create({
   
   // Caution Badge
   cautionBadge: {
-    backgroundColor: '#fff3e0',
+    backgroundColor: '#FEF3C7',
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 4,
     alignSelf: 'flex-start',
     borderWidth: 1,
-    borderColor: '#ffb74d',
+    borderColor: '#F59E0B',
   },
   cautionText: {
-    color: '#e65100',
+    color: '#B45309',
     fontSize: 12,
     fontWeight: '600',
   },

@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Alert, SafeAreaView, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Alert, SafeAreaView, Platform, ScrollView, Animated, Easing } from 'react-native';
+import FloatingAssistant from '../components/FloatingAssistant';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import axios from 'axios';
 import * as Location from 'expo-location'; // Import the Location module
 import { useRouter } from 'expo-router';
 
 // Backend URLs
-const API_URL = 'https://bus-tracker-url.onrender.com/api/passenger';
-const LOCATION_API_URL = 'https://bus-tracker-url.onrender.com/api/location';
+const API_URL = 'http://192.168.137.1:5000/api/passenger';
+const LOCATION_API_URL = 'http://192.168.137.1:5000/api/location';
 
 const PassengerDashboard = () => {
   const [search, setSearch] = useState('');
@@ -24,6 +25,16 @@ const PassengerDashboard = () => {
   const [selectedBusStatus, setSelectedBusStatus] = useState<string>('active'); // 'active', 'lastKnown', 'alert', 'all'
   const [userLocation, setUserLocation] = useState<any>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerX = useRef(new Animated.Value(-280)).current;
+  const scrollRef = useRef<ScrollView | null>(null);
+  const alertsY = useRef(0);
+  const routesY = useRef(0);
+  const [showAlerts, setShowAlerts] = useState(false);
+  const [showRoutes, setShowRoutes] = useState(false);
+  const [showNearby, setShowNearby] = useState(false);
+  const [busSearch, setBusSearch] = useState('');
+  const [showTraffic, setShowTraffic] = useState(false);
 
   // Data fetching
   useEffect(() => {
@@ -221,36 +232,122 @@ const getFilteredBusLocations = () => {
     }
   };
 
+  const fadeIn = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(fadeIn, { toValue: 1, duration: 450, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, []);
+
+  useEffect(() => {
+    Animated.timing(drawerX, {
+      toValue: drawerOpen ? 0 : -280,
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [drawerOpen]);
+
+  const openDrawer = () => setDrawerOpen(true);
+  const closeDrawer = () => setDrawerOpen(false);
+
+  const goToAlerts = () => {
+    closeDrawer();
+    setShowAlerts(true);
+    requestAnimationFrame(() => { if (scrollRef.current) scrollRef.current.scrollTo({ y: alertsY.current, animated: true }); });
+  };
+  const goToRoutes = () => {
+    closeDrawer();
+    setShowRoutes(true);
+    requestAnimationFrame(() => { if (scrollRef.current) scrollRef.current.scrollTo({ y: routesY.current, animated: true }); });
+  };
+  const goToNearbyStops = async () => {
+    closeDrawer();
+    setShowNearby(true);
+    await getUserLocation();
+  };
+  const useMyLocation = async () => {
+    closeDrawer();
+    await getUserLocation();
+  };
+
+  const getStopsInfo = (route: any) => {
+    if (!route) return { start: null, end: null, count: 0 };
+    const stops = route.stops || [];
+    const sorted = [...stops].sort((a, b) => (a.order || 0) - (b.order || 0));
+    const start = sorted[0]?.name || route.startPoint || null;
+    const end = sorted[sorted.length - 1]?.name || route.endPoint || null;
+    return { start, end, count: sorted.length };
+  };
+
+  const getNearestStopIndex = (route: any) => {
+    if (!route?.stops || route.stops.length === 0) return -1;
+    const candidates = getFilteredBusLocations().filter(loc => loc.busId?.route?._id === route._id);
+    if (candidates.length === 0) return -1;
+    const bus = candidates[0];
+    let bestIdx = -1;
+    let bestDist = Number.MAX_VALUE;
+    route.stops.forEach((s: any, idx: number) => {
+      const d = (bus.lat - s.latitude) * (bus.lat - s.latitude) + (bus.lng - s.longitude) * (bus.lng - s.longitude);
+      if (d < bestDist) { bestDist = d; bestIdx = idx; }
+    });
+    return bestIdx;
+  };
+
+  const filteredBuses = busSearch
+    ? getFilteredBusLocations().filter((b:any) => (b.busId?.busNumber || '').toLowerCase().includes(busSearch.toLowerCase()))
+    : [];
+
+  const centerOnBus = (bus:any) => {
+    setSelectedBus(bus);
+    if (mapRef.current) {
+      mapRef.current.animateToRegion({ latitude: bus.lat, longitude: bus.lng, latitudeDelta: 0.02, longitudeDelta: 0.02 }, 400);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header with Logout */}
+      {/* Header with Hamburger + Logout */}
       <View style={styles.header}>
+        <TouchableOpacity style={styles.hamburger} onPress={openDrawer}><Text style={styles.hamburgerText}>☰</Text></TouchableOpacity>
         <Text style={styles.headerTitle}>Passenger Dashboard</Text>
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
       </View>
-      <ScrollView>
-      {/* Search Bar */}
+      <Animated.ScrollView ref={scrollRef as any} style={{ opacity: fadeIn }}>
+      {/* Bus Search */}
       <View style={styles.card}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Search buses or routes..."
-          value={search}
-          onChangeText={setSearch}
+          placeholder="Search your bus (by bus number)..."
+          value={busSearch}
+          onChangeText={setBusSearch}
         />
-        {search.length > 0 && (
+        {busSearch.length > 0 && (
           <FlatList
-            data={filteredRoutes}
+            data={filteredBuses}
             renderItem={({ item }) => (
-              <TouchableOpacity onPress={() => onRouteSelect(item)}>
-                <Text style={styles.dropdownItem}>{item.name}</Text>
+              <TouchableOpacity onPress={() => centerOnBus(item)}>
+                <Text style={styles.dropdownItem}>{item.busId?.busNumber || 'Unknown Bus'}</Text>
               </TouchableOpacity>
             )}
             keyExtractor={(item) => item._id}
           />
         )}
       </View>
+
+      {/* Selected Route Details */}
+      {selectedRoute && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Selected Route</Text>
+          {(() => { const info = getStopsInfo(selectedRoute); return (
+            <View>
+              <Text style={{ color: '#1f2937', fontWeight: '600' }}>Start: <Text style={{ fontWeight: '800' }}>{info.start || 'N/A'}</Text></Text>
+              <Text style={{ color: '#1f2937', fontWeight: '600' }}>End: <Text style={{ fontWeight: '800' }}>{info.end || 'N/A'}</Text></Text>
+              <Text style={{ color: '#6b7280' }}>Total stops: {info.count}</Text>
+            </View>
+          ); })()}
+        </View>
+      )}
 
       {/* Bus Status Filters */}
       <View style={styles.card}>
@@ -296,7 +393,7 @@ const getFilteredBusLocations = () => {
       </View>
 
       {/* Map View */}
-      <View style={styles.card}>
+      <View style={styles.card} onLayout={(e) => { /* placeholder for potential future use */ }}>
         <Text style={styles.cardTitle}>Live Bus Locations</Text>
         <TouchableOpacity 
           style={styles.mapRefreshButton} 
@@ -306,11 +403,13 @@ const getFilteredBusLocations = () => {
           <Text style={styles.mapRefreshButtonText}>{isRefreshing ? '⟳' : '↻'}</Text>
         </TouchableOpacity>
         <MapView
+          provider={PROVIDER_GOOGLE}
           ref={mapRef}
-          style={styles.map}
+          style={[styles.map, selectedRoute ? styles.mapLarge : styles.mapSmall]}
           initialRegion={getInitialRegion()}
           region={getInitialRegion()}
           showsUserLocation
+          showsTraffic={showTraffic}
         >
           {getFilteredBusLocations().map((bus) => {
             const isActive = bus.isActive === undefined ? true : bus.isActive === true;
@@ -377,19 +476,25 @@ const getFilteredBusLocations = () => {
         )}
       </View>
 
-      {/* Alerts */}
-      <View style={styles.card}>
+      {/* Alerts (hidden on home until opened from drawer) */}
+      {showAlerts && (
+      <View style={styles.card} onLayout={(e) => { alertsY.current = e.nativeEvent.layout.y - 8; }}>
         <Text style={styles.cardTitle}>Alerts</Text>
         {alerts.length > 0 ? (
           <FlatList
             data={alerts}
-            renderItem={({ item }) => (
-              <View style={styles.alertItem}>
-                <Text style={styles.alertText}>{item.message}</Text>
-                <Text style={styles.alertTime}>
-                  {new Date(item.createdAt).toLocaleString()}
-                </Text>
-              </View>
+            renderItem={({ item, index }) => (
+              <Animated.View style={{
+                opacity: fadeIn,
+                transform: [{ translateY: Animated.multiply(fadeIn, new Animated.Value(0)) }]
+              }}>
+                <View style={styles.alertItem}>
+                  <Text style={styles.alertText}>{item.message}</Text>
+                  <Text style={styles.alertTime}>
+                    {new Date(item.createdAt).toLocaleString()}
+                  </Text>
+                </View>
+              </Animated.View>
             )}
             keyExtractor={(item) => item._id}
           />
@@ -397,20 +502,27 @@ const getFilteredBusLocations = () => {
           <Text style={styles.noAlerts}>No active alerts</Text>
         )}
       </View>
+      )}
 
-      {/* Routes */}
-      <View style={styles.card}>
+      {/* Routes (hidden on home until opened from drawer) */}
+      {showRoutes && (
+      <View style={styles.card} onLayout={(e) => { routesY.current = e.nativeEvent.layout.y - 8; }}>
         <Text style={styles.cardTitle}>Routes</Text>
-        {filteredRoutes.length > 0 ? (
+        {routes.length > 0 ? (
           <FlatList
-            data={filteredRoutes}
-            renderItem={({ item }) => (
-              <View style={styles.routeItem}>
-                <Text style={styles.routeName}>{item.name}</Text>
-                <Text style={styles.routeInfo}>
-                  {item.startPoint} to {item.endPoint}
-                </Text>
-              </View>
+            data={routes}
+            renderItem={({ item, index }) => (
+              <Animated.View style={{
+                opacity: fadeIn,
+                transform: [{ translateY: Animated.multiply(fadeIn, new Animated.Value(0)) }]
+              }}>
+                <TouchableOpacity onPress={() => onRouteSelect(item)}>
+                  <View style={styles.routeItem}>
+                    <Text style={styles.routeName}>{item.name}</Text>
+                    <Text style={styles.routeInfo}>{(item.stops?.[0]?.name || 'Start')} to {(item.stops?.[item.stops?.length-1]?.name || 'End')}</Text>
+                  </View>
+                </TouchableOpacity>
+              </Animated.View>
             )}
             keyExtractor={(item) => item._id}
           />
@@ -418,13 +530,98 @@ const getFilteredBusLocations = () => {
           <Text style={styles.noAlerts}>No routes available</Text>
         )}
       </View>
-      </ScrollView>
+      )}
+
+      {/* Nearby Stops */}
+      {showNearby && (
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Nearby Stops</Text>
+        {(() => {
+          const stops = routes.flatMap((r:any)=> r.stops || []);
+          const list = userLocation ? stops
+            .map((s:any)=> ({...s, dist: Math.hypot((s.latitude - userLocation.latitude), (s.longitude - userLocation.longitude)) }))
+            .sort((a:any,b:any)=> a.dist - b.dist)
+            .slice(0, 10) : [];
+          return list.length>0 ? (
+            <FlatList data={list} keyExtractor={(i:any,idx:number)=> `${i.name}-${idx}`}
+              renderItem={({item}) => (
+                <TouchableOpacity onPress={() => { if (mapRef.current) mapRef.current.animateToRegion({ latitude: item.latitude, longitude: item.longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 400); }}>
+                  <Text style={styles.dropdownItem}>{item.name}</Text>
+                </TouchableOpacity>
+              )}
+            />
+          ) : (<Text style={styles.noAlerts}>Turn on location to see nearby stops</Text>);
+        })()}
+      </View>
+      )}
+      </Animated.ScrollView>
+      {/* Drawer */}
+      {drawerOpen && (
+        <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={closeDrawer} />
+      )}
+      <Animated.View pointerEvents={drawerOpen ? 'auto' : 'none'} style={[styles.drawer, { transform: [{ translateX: drawerX }] }]}>
+        <View style={styles.drawerHeaderBar}>
+          <Text style={styles.drawerHeaderTitle}>Menu</Text>
+          <TouchableOpacity onPress={closeDrawer}><Text style={styles.drawerClose}>✕</Text></TouchableOpacity>
+        </View>
+        <View style={styles.drawerInnerWrap}>
+          <TouchableOpacity style={styles.drawerItem} onPress={goToAlerts}>
+            <Text style={styles.drawerItemIcon}>📢</Text>
+            <Text style={styles.drawerItemText}>Alerts</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.drawerItem} onPress={goToRoutes}>
+            <Text style={styles.drawerItemIcon}>🗺️</Text>
+            <Text style={styles.drawerItemText}>Routes</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.drawerItem} onPress={goToNearbyStops}>
+            <Text style={styles.drawerItemIcon}>📍</Text>
+            <Text style={styles.drawerItemText}>Nearby Stops</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.drawerItem} onPress={useMyLocation}>
+            <Text style={styles.drawerItemIcon}>🎯</Text>
+            <Text style={styles.drawerItemText}>Use My Location</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.drawerItem} onPress={() => setShowTraffic(v => !v)}>
+            <Text style={styles.drawerItemIcon}>🛣️</Text>
+            <Text style={styles.drawerItemText}>{showTraffic ? 'Hide Traffic' : 'Show Traffic'}</Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+
+      {/* Stops timeline for selected route */}
+      {selectedRoute && (
+        <View style={[styles.card, { paddingTop: 10 }]}> 
+          <Text style={styles.cardTitle}>Stops Timeline</Text>
+          <View style={{ flexDirection: 'row' }}>
+            <View style={styles.timelineRail} />
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              {(selectedRoute.stops || []).sort((a:any,b:any)=>(a.order||0)-(b.order||0)).map((s:any, idx:number) => {
+                const busIdx = getNearestStopIndex(selectedRoute);
+                const isBusHere = idx === busIdx;
+                return (
+                  <View key={`${s.name}-${idx}`} style={styles.timelineRow}>
+                    <View style={[styles.timelineDot, isBusHere && { backgroundColor: '#0d6efd' }]} />
+                    <View style={{ marginLeft: 8, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                      {isBusHere && <Text style={{ marginRight: 6 }}>🚌</Text>}
+                      <Text style={{ color: '#1f2937' }}>{s.name}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      )}
+      {/* Floating Assistant for Passenger */}
+      <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 }}>
+        <FloatingAssistant role="passenger" />
+      </View>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f7f9fa', padding: 10 },
+  container: { flex: 1, backgroundColor: '#FFFBEB', padding: 10 },
   card: {
     backgroundColor: '#fff',
     borderRadius: 10,
@@ -447,7 +644,7 @@ const styles = StyleSheet.create({
   prefixText: { fontSize: 15, padding: 6, color: '#007bff' },
   selectedPrefix: { fontWeight: 'bold', color: '#28a745' },
   saveButton: {
-    backgroundColor: '#007bff',
+    backgroundColor: '#F59E0B',
     borderRadius: 6,
     padding: 10,
     alignItems: 'center',
@@ -531,6 +728,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     paddingHorizontal: 5,
   },
+  hamburger: { paddingVertical: 6, paddingHorizontal: 10, backgroundColor: '#F59E0B', borderRadius: 6 },
+  hamburgerText: { color: '#1F2937', fontWeight: '800' },
   headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#2c3e50' },
   logoutButton: {
     backgroundColor: '#e74c3c',
@@ -539,6 +738,18 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   logoutText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.35)' },
+  drawer: { position: 'absolute', top: 0, bottom: 0, left: 0, width: 280, backgroundColor: '#FFFFFF', elevation: 8, zIndex: 1001 },
+  drawerHeaderBar: { height: 56, backgroundColor: '#F59E0B', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
+  drawerHeaderTitle: { color: '#1F2937', fontSize: 18, fontWeight: '800' },
+  drawerClose: { color: '#1F2937', fontSize: 18, fontWeight: '800' },
+  drawerInnerWrap: { padding: 12 },
+  drawerItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 14, backgroundColor: '#F8F9FA', borderRadius: 12, marginBottom: 12 },
+  drawerItemIcon: { width: 28, textAlign: 'center', marginRight: 10 },
+  drawerItemText: { color: '#1F2937', fontSize: 15, fontWeight: '700' },
+  timelineRail: { width: 2, backgroundColor: '#e5e7eb', marginLeft: 8 },
+  timelineRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
+  timelineDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#e5e7eb', marginLeft: -7 },
   filterContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -551,7 +762,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
   },
   selectedFilter: {
-    backgroundColor: '#007bff',
+    backgroundColor: '#F59E0B',
   },
   filterText: {
     fontSize: 14,

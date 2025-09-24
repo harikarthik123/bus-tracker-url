@@ -3,16 +3,22 @@ import { View, Text, StyleSheet, SafeAreaView, TextInput, TouchableOpacity, Flat
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
+import { useOnline } from '../utils/useOnline';
 import { MaterialIcons } from '@expo/vector-icons'; // If you have expo/vector-icons installed
 import { useAdminI18n } from '../utils/i18n';
+import * as DocumentPicker from 'expo-document-picker';
+import { enqueueRequest } from '../utils/outbox';
 
-const API_URL = 'https://bus-tracker-url.onrender.com/api/admin/drivers'; // API URL for driver management
+const API_URL = 'http://192.168.137.1:5000/api/admin/drivers'; // API URL for driver management
 
 const DriverManagement = () => {
   const router = useRouter();
   const { t } = useAdminI18n();
+  const online = useOnline();
   type Driver = { _id: string; name: string; email: string; driverId?: string; busId?: string | null; syncStatus?: string; password?: string };
   const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showAll, setShowAll] = useState(false);
   const [editingDriverId, setEditingDriverId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -45,8 +51,11 @@ const DriverManagement = () => {
     }
     try {
       const token = await AsyncStorage.getItem('token');
-      const response = await axios.post(API_URL, { name, email, password, driverId, busId: busId || null }, { headers: { 'x-auth-token': token } });
-      setDrivers((prev: Driver[]) => [...prev, response.data.driver as Driver]);
+      const payload = { name, email, password, driverId, busId: busId || null };
+      const temp: Driver = { _id: `temp-${Date.now()}`, name, email, driverId, busId, syncStatus: 'pending' } as any;
+      setDrivers((prev: Driver[]) => [...prev, temp]);
+      await enqueueRequest({ url: API_URL, method: 'post', data: payload, headers: { 'x-auth-token': token || '' } });
+      fetchDrivers();
       setName('');
       setEmail('');
       setPassword('');
@@ -55,7 +64,7 @@ const DriverManagement = () => {
       Alert.alert('Success', 'Driver created successfully!');
     } catch (error) {
       console.error('Error creating driver:', error);
-      Alert.alert('Error', 'Failed to create driver.');
+      Alert.alert('Error', 'Failed to create driver. Stored offline if applicable.');
     }
   };
 
@@ -86,11 +95,13 @@ const DriverManagement = () => {
     }
     try {
       const token = await AsyncStorage.getItem('token');
-      const response = await axios.put(`${API_URL}/${editingDriverId}`, { name, email, password, driverId, busId: busId || null }, { headers: { 'x-auth-token': token } });
-      setDrivers((prev: Driver[]) => prev.map((d) => (d._id === (editingDriverId as string) ? (response.data.driver as Driver) : d)));
+      const payload = { name, email, password, driverId, busId: busId || null };
+      setDrivers((prev: Driver[]) => prev.map((d) => (d._id === (editingDriverId as string) ? ({ ...d, ...payload, syncStatus: 'pending' }) as Driver : d)));
+      await enqueueRequest({ url: `${API_URL}/${editingDriverId}`, method: 'put', data: payload, headers: { 'x-auth-token': token || '' } });
+      fetchDrivers();
     } catch (error) {
       console.error('Error updating driver:', error);
-      Alert.alert('Error', 'Failed to update driver.');
+      Alert.alert('Error', 'Failed to update driver. Stored offline if applicable.');
     }
 
     setName('');
@@ -112,11 +123,11 @@ const DriverManagement = () => {
           onPress: async () => {
             try {
               const token = await AsyncStorage.getItem('token');
-              await axios.delete(`${API_URL}/${id}`, { headers: { 'x-auth-token': token } });
               setDrivers((prev: Driver[]) => prev.filter((d) => d._id !== id));
+              await enqueueRequest({ url: `${API_URL}/${id}`, method: 'delete', headers: { 'x-auth-token': token || '' } });
             } catch (err) {
               console.error('Error deleting driver:', err);
-              Alert.alert('Error', 'Failed to delete driver.');
+              Alert.alert('Error', 'Failed to delete driver. Stored offline if applicable.');
             }
           },
           style: 'destructive',
@@ -124,6 +135,24 @@ const DriverManagement = () => {
       ],
       { cancelable: true }
     );
+  };
+
+  const handleUploadCsv = async () => {
+    try {
+      const pick = await DocumentPicker.getDocumentAsync({ type: 'text/csv' });
+      if (pick.canceled || !pick.assets?.[0]) return;
+      const file = pick.assets[0];
+      const token = await AsyncStorage.getItem('token');
+      const form = new FormData();
+      // @ts-ignore
+      form.append('file', { uri: file.uri, name: file.name || 'drivers.csv', type: 'text/csv' });
+      await axios.post('http://192.168.137.1:5000/api/admin/drivers/bulk', form, { headers: { 'x-auth-token': token, 'Content-Type': 'multipart/form-data' } });
+      Alert.alert('Success', 'Drivers uploaded.');
+      fetchDrivers();
+    } catch (e) {
+      console.error('Upload drivers CSV error', e);
+      Alert.alert('Error', 'Upload failed. Ensure required columns are present.');
+    }
   };
 
   const renderDriverItem = ({ item }: { item: Driver }) => (
@@ -168,6 +197,13 @@ const DriverManagement = () => {
       </View>
       <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
         <View style={styles.divider} />
+        <View style={styles.uploadBox}>
+          <Text style={styles.uploadTitle}>File Upload (CSV/XLSX)</Text>
+          <Text style={styles.uploadHint}>Required: driverId, name, email. Optional: password, busId/busNumber/reg_no</Text>
+          <TouchableOpacity style={[styles.actionButton, styles.createButton]} onPress={handleUploadCsv}>
+            <Text style={styles.buttonText}>Upload CSV</Text>
+          </TouchableOpacity>
+        </View>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{editingDriverId ? t('driver.update') : t('driver.add')}</Text>
           <View style={styles.formContainer}>
@@ -218,8 +254,23 @@ const DriverManagement = () => {
         <View style={styles.divider} />
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('driver.list.title')}</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Search by name, email or driverId"
+            value={searchQuery}
+            onChangeText={(v) => { setSearchQuery(v); if (v) setShowAll(false); }}
+            autoCapitalize="none"
+          />
+          {(!searchQuery && !showAll) ? (
+            <View>
+              <TouchableOpacity style={[styles.actionButton, styles.updateButton]} onPress={() => setShowAll(true)}>
+                <Text style={styles.buttonText}>View All</Text>
+              </TouchableOpacity>
+              <Text style={{ color: '#6b7280', marginTop: 8 }}>Start typing to search drivers or tap View All.</Text>
+            </View>
+          ) : null}
           <FlatList
-            data={drivers}
+            data={(searchQuery ? drivers.filter(d => (d.name||'').toLowerCase().includes(searchQuery.toLowerCase()) || (d.email||'').toLowerCase().includes(searchQuery.toLowerCase()) || (d.driverId||'').toLowerCase().includes(searchQuery.toLowerCase())) : (showAll ? drivers : []))}
             keyExtractor={(item) => item._id.toString()}
             renderItem={renderDriverItem}
             ListEmptyComponent={<Text style={{ padding: 20, color: '#888', textAlign: 'center' }}>{t('driver.list.empty')}</Text>}
@@ -236,7 +287,7 @@ const DriverManagement = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f7f9fa',
+    backgroundColor: '#F8F9FA',
     paddingHorizontal: 0,
   },
   header: {
@@ -261,7 +312,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 6,
-    backgroundColor: '#007bff',
+    backgroundColor: '#F59E0B',
     marginHorizontal: 4,
     elevation: 2,
   },
@@ -275,6 +326,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#e3e3e3',
     marginHorizontal: 18,
     marginVertical: 8,
+  },
+  uploadBox: {
+    marginHorizontal: 18,
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  uploadTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  uploadHint: {
+    color: '#6b7280',
+    marginBottom: 10,
   },
   section: {
     paddingHorizontal: 18,
@@ -317,7 +385,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   createButton: {
-    backgroundColor: '#28a745',
+    backgroundColor: '#F59E0B',
   },
   updateButton: {
     backgroundColor: '#007bff',

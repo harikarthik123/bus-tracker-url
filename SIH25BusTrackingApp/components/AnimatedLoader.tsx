@@ -31,7 +31,7 @@ const AnimatedLoader: React.FC<AnimatedLoaderProps> = ({ onAnimationComplete }) 
     return () => { circleLoop.stop(); clearTimeout(timer); };
   }, [onAnimationComplete, letterAnims, circleAnim]);
 
-  const stroke = circleAnim.interpolate({ inputRange: [0, 1], outputRange: ['#42c0ff', '#ffa100'] });
+  const stroke = circleAnim.interpolate({ inputRange: [0, 1], outputRange: ['#FFFFFF', '#FDE68A'] });
   const dashOffset = circleAnim.interpolate({ inputRange: [0, 1], outputRange: [0, dash * 2] });
 
   const letters = ['B', 'U', 'S', 'S', 'B', 'E', 'E'];
@@ -56,7 +56,7 @@ const AnimatedLoader: React.FC<AnimatedLoaderProps> = ({ onAnimationComplete }) 
         />
         <G>
           {letters.map((ch, idx) => {
-            const fill = letterAnims[idx].interpolate({ inputRange: [0, 1], outputRange: ['#42c0ff', '#ffa100'] });
+            const fill = letterAnims[idx].interpolate({ inputRange: [0, 1], outputRange: ['#FFFFFF', '#FDE68A'] });
             return (
               <AnimatedSvgText
                 key={`${ch}-${idx}`}
@@ -76,7 +76,7 @@ const AnimatedLoader: React.FC<AnimatedLoaderProps> = ({ onAnimationComplete }) 
           y={100}
           fontSize="14"
           fontFamily="Times New Roman"
-          fill="#ffffff"
+          fill="#FFFFFF"
           textAnchor="middle"
         >
           always buzzing, always on time
@@ -90,7 +90,7 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const AnimatedSvgText = Animated.createAnimatedComponent(SvgText as any);
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#000' },
+  container: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F59E0B' },
 });
 
 export default AnimatedLoader;

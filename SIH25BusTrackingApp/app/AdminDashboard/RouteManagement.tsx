@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TextInput, TouchableOpacity, FlatList, Alert, Platform, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useOnline } from '../utils/useOnline';
 import { useAdminI18n } from '../utils/i18n';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FlatList as GestureFlatList } from 'react-native-gesture-handler';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Picker } from '@react-native-picker/picker';
+import * as DocumentPicker from 'expo-document-picker';
 
-const API_URL = 'https://bus-tracker-url.onrender.com/api/admin'; // Base API URL for admin management
+const API_URL = 'http://192.168.137.1:5000/api/admin'; // Base API URL for admin management
 
 const { width, height } = Dimensions.get('window');
 const ASPECT_RATIO = width / height;
@@ -16,7 +18,7 @@ const LATITUDE_DELTA = 0.0922;
 const LONGITUDE_DELTA = LATITUDE_DELTA * ASPECT_RATIO;
 
 interface StopType {
-  _id: string;
+  _id?: string;
   name: string;
   latitude: number;
   longitude: number;
@@ -39,6 +41,7 @@ interface RouteType {
 const RouteManagement = () => {
   const router = useRouter();
   const { t } = useAdminI18n();
+  const online = useOnline();
   const [routes, setRoutes] = useState<RouteType[]>([]);
   const [name, setName] = useState('');
   const [duration, setDuration] = useState('');
@@ -53,6 +56,8 @@ const RouteManagement = () => {
   });
   const [routeCoordinates, setRouteCoordinates] = useState<CoordinateType[]>([]); // For Polyline
   const [mapMode, setMapMode] = useState<'route' | 'stop' | null>(null); // 'route' or 'stop'
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     fetchRoutes();
@@ -192,6 +197,47 @@ const RouteManagement = () => {
     );
   };
 
+  const handleUploadCsv = async () => {
+    try {
+      const pick = await DocumentPicker.getDocumentAsync({ type: 'text/csv' });
+      if (pick.canceled || !pick.assets?.[0]) return;
+      const file = pick.assets[0];
+      const token = await AsyncStorage.getItem('token');
+      const form = new FormData();
+      // @ts-ignore
+      form.append('file', { uri: file.uri, name: file.name || 'routes.csv', type: 'text/csv' });
+      await axios.post(`${API_URL}/routes/bulk`, form, { headers: { 'x-auth-token': token, 'Content-Type': 'multipart/form-data' } });
+      Alert.alert('Success', 'Routes uploaded.');
+      fetchRoutes();
+    } catch (e) {
+      console.error('Upload routes CSV error', e);
+      Alert.alert('Error', 'Upload failed. Ensure required columns are present.');
+    }
+  };
+
+  const handleUploadShape = async () => {
+    try {
+      const pick = await DocumentPicker.getDocumentAsync({ type: ['application/geo+json', 'application/json', 'application/gpx+xml', 'application/xml', 'text/xml'] as any });
+      if (pick.canceled || !pick.assets?.[0]) return;
+      if (!name) {
+        Alert.alert('Route Name Required', 'Enter/select a route name before uploading shape.');
+        return;
+      }
+      const file = pick.assets[0];
+      const token = await AsyncStorage.getItem('token');
+      const form = new FormData();
+      // @ts-ignore
+      form.append('file', { uri: file.uri, name: file.name || 'route-shape', type: file.mimeType || 'application/octet-stream' });
+      form.append('route_name', name);
+      await axios.post(`${API_URL}/routes/shape`, form, { headers: { 'x-auth-token': token, 'Content-Type': 'multipart/form-data' } });
+      Alert.alert('Success', 'Route shape uploaded.');
+      fetchRoutes();
+    } catch (e) {
+      console.error('Upload route shape error', e);
+      Alert.alert('Error', 'Upload failed. Provide valid GeoJSON (LineString/MultiLineString) or GPX.');
+    }
+  };
+
   const renderRouteItem = ({ item }: { item: any }) => (
     <View style={styles.routeItem}>
       <View>
@@ -274,6 +320,7 @@ const RouteManagement = () => {
           )}
 
           <MapView
+            provider={PROVIDER_GOOGLE}
             style={styles.map}
             region={mapRegion}
             onRegionChangeComplete={setMapRegion}
@@ -323,8 +370,37 @@ const RouteManagement = () => {
         </View>
 
         <Text style={styles.listTitle}>Existing Routes</Text>
+        <View style={styles.uploadBox}>
+          <Text style={styles.uploadTitle}>File Upload (CSV/XLSX)</Text>
+          <Text style={styles.uploadHint}>Required per row: route_name, stop_name, lat, lng, sequence. Optional: duration</Text>
+          <TouchableOpacity style={[styles.actionButton, styles.createButton]} onPress={handleUploadCsv}>
+            <Text style={styles.buttonText}>Upload CSV</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.uploadBox}>
+          <Text style={styles.uploadTitle}>Route Shape Upload (GeoJSON/GPX)</Text>
+          <Text style={styles.uploadHint}>File field name: file. Max size: 10 MB. Uses current Route Name.</Text>
+          <TouchableOpacity style={[styles.actionButton, styles.createButton]} onPress={handleUploadShape}>
+            <Text style={styles.buttonText}>Upload Shape</Text>
+          </TouchableOpacity>
+        </View>
+        <TextInput
+          style={styles.input}
+          placeholder="Search routes by name"
+          value={searchQuery}
+          onChangeText={(v) => { setSearchQuery(v); if (v) setShowAll(false); }}
+          autoCapitalize="none"
+        />
+        {(!searchQuery && !showAll) ? (
+          <View style={{ width: '100%', marginBottom: 10 }}>
+            <TouchableOpacity style={[styles.actionButton, styles.updateButton]} onPress={() => setShowAll(true)}>
+              <Text style={styles.buttonText}>View All</Text>
+            </TouchableOpacity>
+            <Text style={{ color: '#6b7280', marginTop: 8, textAlign: 'center' }}>Search routes or tap View All.</Text>
+          </View>
+        ) : null}
         <FlatList
-          data={routes}
+          data={(searchQuery ? routes.filter(r => (r.name||'').toLowerCase().includes(searchQuery.toLowerCase())) : (showAll ? routes : []))}
           renderItem={renderRouteItem}
           keyExtractor={(item) => item._id.toString()}
           ListEmptyComponent={<Text>No routes added yet.</Text>}
@@ -339,7 +415,7 @@ const RouteManagement = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f0f2f5',
+    backgroundColor: '#F8F9FA',
     paddingTop: Platform.OS === 'android' ? 30 : 0,
   },
   header: {
@@ -357,7 +433,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 6,
-    backgroundColor: '#007bff',
+    backgroundColor: '#F59E0B',
     marginHorizontal: 4,
     elevation: 2,
   },
@@ -414,13 +490,16 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   mapModeButton: {
-    backgroundColor: '#6c757d',
+    backgroundColor: '#F8F9FA',
+    borderWidth: 1,
+    borderColor: '#DEE2E6',
     paddingVertical: 10,
     paddingHorizontal: 15,
-    borderRadius: 5,
+    borderRadius: 18,
   },
   activeMapMode: {
-    backgroundColor: '#007bff',
+    backgroundColor: '#F59E0B',
+    borderColor: '#F59E0B',
   },
   clearMapButton: {
     backgroundColor: '#dc3545',
@@ -538,6 +617,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 5,
     marginLeft: 10,
+  },
+  uploadBox: {
+    width: '100%',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  uploadTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  uploadHint: {
+    color: '#6b7280',
+    marginBottom: 10,
   },
 });
 

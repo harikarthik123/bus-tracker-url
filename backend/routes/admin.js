@@ -7,6 +7,54 @@ const Bus = require('../models/Bus');
 const Route = require('../models/Route'); // Added Route model
 const AlertModel = require('../models/Alert');
 const auth = require('../middleware/auth'); // We will create this middleware later for protected routes
+const multer = require('multer');
+const { parse } = require('csv-parse');
+const upload = multer({ limits: { fileSize: 10 * 1024 * 1024 } });
+const XLSX = require('xlsx');
+const xml2js = require('xml2js');
+
+function requireColumns(record, required, index) {
+  const missing = required.filter((k) => !(k in record) || String(record[k]).trim() === '');
+  if (missing.length) {
+    const err = new Error(`Row ${index + 1} missing required columns: ${missing.join(', ')}`);
+    err.status = 400;
+    throw err;
+  }
+}
+
+function normalizeHeader(header) {
+  return String(header || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_');
+}
+
+function normalizeRecordKeys(record) {
+  const normalized = {};
+  Object.keys(record || {}).forEach((k) => {
+    normalized[normalizeHeader(k)] = record[k];
+  });
+  return normalized;
+}
+
+async function parseUploadToRecords(fileBuffer, originalName, mime) {
+  const isExcel = /sheet|ms-excel/i.test(String(mime)) || /\.xlsx$|\.xls$/i.test(String(originalName));
+  if (isExcel) {
+    const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    return json.map(normalizeRecordKeys);
+  }
+  // Fallback CSV
+  const text = fileBuffer.toString('utf8');
+  return await new Promise((resolve, reject) => {
+    parse(text, { columns: (cols) => cols.map(normalizeHeader), skip_empty_lines: true, trim: true }, (err, records) => {
+      if (err) return reject(err);
+      resolve(records);
+    });
+  });
+}
 
 // @route   GET api/admin/drivers
 // @desc    Get all drivers
@@ -65,6 +113,69 @@ router.post('/drivers', auth, async (req, res) => {
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server error');
+  }
+});
+
+// @route   POST api/admin/drivers/bulk
+// @desc    File upload drivers (CSV/XLSX). Required: driverId, name, email. Optional: password, busId|busNumber|regNo
+// @access  Private (Admin only)
+router.post('/drivers/bulk', auth, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ msg: 'file is required (multipart field name: file)' });
+    const results = [];
+    const records = await parseUploadToRecords(req.file.buffer, req.file.originalname, req.file.mimetype);
+    const required = ['driverid', 'name', 'email'];
+    for (let i = 0; i < records.length; i++) {
+      const rr = records[i];
+      const r = {
+        driverid: rr.driverid ?? rr.driver_id ?? rr.driverId,
+        name: rr.name,
+        email: rr.email,
+        password: rr.password,
+        // bus reference can be provided in multiple ways
+        busid: rr.busid ?? rr.bus_id ?? rr.busId,
+        busnumber: rr.busnumber ?? rr.bus_number ?? rr.busNumber,
+        regno: rr.regno ?? rr.reg_no,
+        busregno: rr.busregno ?? rr.bus_reg_no,
+      };
+      requireColumns(r, required, i);
+      let resolvedBusId = null;
+      // Priority: explicit busId (ObjectId) > busNumber > regNo/bus_reg_no
+      if (r.busid && mongoose.Types.ObjectId.isValid(String(r.busid))) {
+        resolvedBusId = String(r.busid);
+      } else if (r.busnumber) {
+        const byNumber = await Bus.findOne({ busNumber: String(r.busnumber) });
+        resolvedBusId = byNumber ? byNumber._id : null;
+      } else if (r.regno || r.busregno) {
+        const byReg = await Bus.findOne({ regNo: String(r.regno || r.busregno) });
+        resolvedBusId = byReg ? byReg._id : null;
+      }
+      let user = await User.findOne({ $or: [{ email: r.email }, { driverId: r.driverid }] });
+      if (user) {
+        user.name = r.name || user.name;
+        user.driverId = r.driverid || user.driverId;
+        user.busId = resolvedBusId;
+        if (r.password) {
+          const salt = await bcrypt.genSalt(10);
+          user.password = await bcrypt.hash(String(r.password), salt);
+        }
+        await user.save();
+        results.push({ email: r.email, action: 'updated', id: user._id });
+      } else {
+        let hashed = null;
+        if (r.password) {
+          const salt = await bcrypt.genSalt(10);
+          hashed = await bcrypt.hash(String(r.password), salt);
+        }
+        user = new User({ name: r.name, email: r.email, password: hashed || 'ChangeMe123!', role: 'driver', driverId: r.driverid, busId: resolvedBusId });
+        await user.save();
+        results.push({ email: r.email, action: 'created', id: user._id });
+      }
+    }
+    res.json({ msg: 'Drivers processed', results });
+  } catch (err) {
+    console.error(err.message);
+    res.status(err.status || 500).json({ msg: err.message || 'Server error' });
   }
 });
 
@@ -191,6 +302,60 @@ router.post('/buses', auth, async (req, res) => {
   }
 });
 
+// @route   POST api/admin/buses/bulk
+// @desc    File upload buses (CSV/XLSX). Required: busNumber, regNo, capacity. Optional: routeId|route_name, driverId
+// @access  Private (Admin only)
+router.post('/buses/bulk', auth, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ msg: 'file is required (multipart field name: file)' });
+    const results = [];
+    const records = await parseUploadToRecords(req.file.buffer, req.file.originalname, req.file.mimetype);
+    const required = ['busnumber', 'regno', 'capacity'];
+    for (let i = 0; i < records.length; i++) {
+      const rr = records[i];
+      // Accept aliases: bus_id->busnumber, reg_no->regno, route_name->routename, route_id->routeid, driver_id->driverid
+      const r = {
+        busnumber: rr.busnumber ?? rr.bus_id ?? rr.busNumber,
+        regno: rr.regno ?? rr.reg_no,
+        capacity: rr.capacity,
+        routename: rr.routename ?? rr.route_name,
+        routeid: rr.routeid ?? rr.route_id ?? rr.routeId,
+        driverid: rr.driverid ?? rr.driver_id ?? rr.driverId,
+      };
+      requireColumns(r, required, i);
+      let routeRef = null;
+      if (r.routeid && mongoose.Types.ObjectId.isValid(String(r.routeid))) {
+        routeRef = String(r.routeid);
+      } else if (r.routename) {
+        const route = await Route.findOne({ name: String(r.routename) });
+        routeRef = route ? route._id : null;
+      }
+      let driverRef = null;
+      if (r.driverid) {
+        const drv = await User.findOne({ driverId: String(r.driverid) });
+        driverRef = drv ? drv._id : null;
+      }
+      const existing = await Bus.findOne({ regNo: String(r.regno) });
+      if (existing) {
+        existing.busNumber = String(r.busnumber);
+        existing.capacity = Number(r.capacity) || existing.capacity;
+        existing.route = routeRef;
+        if (driverRef !== null) existing.driver = driverRef;
+        await existing.save();
+        results.push({ regNo: r.regno, action: 'updated', id: existing._id });
+      } else {
+        const bus = new Bus({ busNumber: String(r.busnumber), regNo: String(r.regno), capacity: Number(r.capacity), route: routeRef, driver: driverRef });
+        await bus.save();
+        results.push({ regNo: r.regno, action: 'created', id: bus._id });
+      }
+    }
+    res.json({ msg: 'Buses processed', results });
+  } catch (err) {
+    console.error(err.message);
+    res.status(err.status || 500).json({ msg: err.message || 'Server error' });
+  }
+});
+
 // @route   PUT api/admin/buses/:id
 // @desc    Update bus
 // @access  Private (Admin only)
@@ -285,6 +450,156 @@ router.post('/routes', auth, async (req, res) => {
     res.status(500).send('Server error');
   }
 });
+
+// @route   POST api/admin/routes/bulk
+// @desc    File upload routes (CSV/XLSX). Required per row: name, stop_name, latitude, longitude, order. Optional: route_id, duration
+// @access  Private (Admin only)
+router.post('/routes/bulk', auth, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ msg: 'file is required (multipart field name: file)' });
+    const records = await parseUploadToRecords(req.file.buffer, req.file.originalname, req.file.mimetype);
+    const required = ['name', 'stopname', 'latitude', 'longitude', 'order'];
+    const routesMap = new Map();
+    records.forEach((rr, i) => {
+      const r = {
+        routeid: rr.routeid ?? rr.route_id ?? rr.routeId,
+        name: rr.name ?? rr.route_name,
+        stopname: rr.stopname ?? rr.stop_name,
+        latitude: rr.latitude ?? rr.lat,
+        longitude: rr.longitude ?? rr.lng,
+        order: rr.order ?? rr.sequence,
+        duration: rr.duration,
+      };
+      requireColumns(r, required, i);
+      const key = String(r.name || r.routeid);
+      const routeName = String(r.name);
+      const stop = {
+        name: String(r.stopname),
+        latitude: Number(r.latitude),
+        longitude: Number(r.longitude),
+        order: Number(r.order),
+      };
+      if (!routesMap.has(key)) routesMap.set(key, { name: routeName, stops: [], duration: r.duration });
+      const payload = routesMap.get(key);
+      payload.stops.push(stop);
+      if (r.duration && !payload.duration) payload.duration = r.duration;
+    });
+
+    const results = [];
+    for (const [_key, payload] of routesMap.entries()) {
+      const existing = await Route.findOne({ name: payload.name });
+      if (existing) {
+        existing.stops = payload.stops.sort((a, b) => a.order - b.order);
+        if (payload.duration) existing.duration = payload.duration;
+        await existing.save();
+        results.push({ routeName: payload.name, action: 'updated', id: existing._id });
+      } else {
+        const route = new Route({ name: payload.name, duration: payload.duration || '', stops: payload.stops.sort((a, b) => a.order - b.order) });
+        await route.save();
+        results.push({ routeName: payload.name, action: 'created', id: route._id });
+      }
+    }
+    res.json({ msg: 'Routes processed', results });
+  } catch (err) {
+    console.error(err.message);
+    res.status(err.status || 500).json({ msg: err.message || 'Server error' });
+  }
+});
+
+// @route   POST api/admin/routes/shape
+// @desc    Upload a high-resolution route shape (GeoJSON or GPX). Body must include route_name
+// @access  Private (Admin only)
+router.post('/routes/shape', auth, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ msg: 'file is required (multipart field name: file)' });
+    const routeName = String(req.body.route_name || '').trim();
+    if (!routeName) return res.status(400).json({ msg: 'route_name is required' });
+
+    const geo = await parseGeoToShape(req.file.buffer, req.file.originalname, req.file.mimetype);
+    if (!geo) return res.status(400).json({ msg: 'Unsupported or invalid Geo format. Provide GeoJSON LineString/MultiLineString or GPX with trk/trkseg.' });
+
+    let route = await Route.findOne({ name: routeName });
+    if (route) {
+      route.shape = geo.shape;
+      route.shapeSource = geo.source;
+      await route.save();
+      return res.json({ msg: 'Route shape updated', id: route._id });
+    } else {
+      route = new Route({ name: routeName, stops: [], duration: '', routeCoordinates: [], shape: geo.shape, shapeSource: geo.source });
+      await route.save();
+      return res.status(201).json({ msg: 'Route created with shape', id: route._id });
+    }
+  } catch (err) {
+    console.error(err.message);
+    res.status(err.status || 500).json({ msg: err.message || 'Server error' });
+  }
+});
+
+async function parseGeoToShape(fileBuffer, originalName, mime) {
+  const name = String(originalName || '').toLowerCase();
+  const content = fileBuffer.toString('utf8');
+  // GeoJSON
+  if (/geo\+json|json/i.test(String(mime)) || /\.geojson$|\.json$/i.test(name)) {
+    try {
+      const data = JSON.parse(content);
+      // Accept FeatureCollection, Feature, or Geometry
+      let geometry = null;
+      if (data.type === 'FeatureCollection') {
+        const geoms = (data.features || []).map(f => f && f.geometry).filter(Boolean);
+        geometry = mergeGeometries(geoms);
+      } else if (data.type === 'Feature') {
+        geometry = data.geometry;
+      } else if (data.type === 'LineString' || data.type === 'MultiLineString') {
+        geometry = data;
+      }
+      if (!geometry) return null;
+      if (geometry.type === 'LineString' || geometry.type === 'MultiLineString') {
+        return { source: 'geojson', shape: { type: geometry.type, coordinates: geometry.coordinates } };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+  // GPX
+  if (/gpx\+xml|xml/i.test(String(mime)) || /\.gpx$|\.xml$/i.test(name)) {
+    try {
+      const parsed = await xml2js.parseStringPromise(content, { explicitArray: true, mergeAttrs: false });
+      const trks = (((parsed || {}).gpx || [])[0] || {}).trk || [];
+      const lines = [];
+      for (const trk of trks) {
+        const segs = (trk.trkseg || []);
+        for (const seg of segs) {
+          const pts = (seg.trkpt || []);
+          const coords = pts.map(pt => {
+            const lat = parseFloat(pt.$?.lat);
+            const lon = parseFloat(pt.$?.lon);
+            return [lon, lat];
+          }).filter(arr => Number.isFinite(arr[0]) && Number.isFinite(arr[1]));
+          if (coords.length > 1) lines.push(coords);
+        }
+      }
+      if (lines.length === 0) return null;
+      if (lines.length === 1) return { source: 'gpx', shape: { type: 'LineString', coordinates: lines[0] } };
+      return { source: 'gpx', shape: { type: 'MultiLineString', coordinates: lines } };
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function mergeGeometries(geoms) {
+  const lines = [];
+  for (const g of geoms) {
+    if (!g) continue;
+    if (g.type === 'LineString') lines.push(g.coordinates);
+    else if (g.type === 'MultiLineString') lines.push(...g.coordinates);
+  }
+  if (lines.length === 0) return null;
+  if (lines.length === 1) return { type: 'LineString', coordinates: lines[0] };
+  return { type: 'MultiLineString', coordinates: lines };
+}
 
 // @route   PUT api/admin/routes/:id
 // @desc    Update route

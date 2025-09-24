@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TextInput, TouchableOpacity, FlatList, Alert } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Picker } from '@react-native-picker/picker';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAdminI18n } from '../utils/i18n';
 
-const API_URL = 'https://bus-tracker-url.onrender.com/api/admin';
+const API_URL = 'http://192.168.137.1:5000/api/admin';
 
 const AlertsManagement = () => {
   const { t } = useAdminI18n();
@@ -309,12 +310,12 @@ const AlertsManagement = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.header}>
+      <LinearGradient colors={["#F59E0B", "#FDE68A"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingVertical: 12 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 }}>
           <TouchableOpacity style={styles.navButton} onPress={() => router.back()}>
-            <Text style={styles.navButtonText}>← Back</Text>
+            <Text style={styles.navButtonText}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>{t('screen.alerts.title')}</Text>
+          <Text style={styles.headerTitle}>{t('screen.alerts.title')}</Text>
           <TouchableOpacity 
             style={styles.refreshButton} 
             onPress={() => {
@@ -324,9 +325,11 @@ const AlertsManagement = () => {
               Alert.alert('Success', 'Data refreshed successfully');
             }}
           >
-            <Text style={styles.refreshButtonText}>🔄 Refresh</Text>
+            <Text style={styles.refreshButtonText}>🔄</Text>
           </TouchableOpacity>
         </View>
+      </LinearGradient>
+      <ScrollView contentContainerStyle={styles.scroll}>
 
         <View style={styles.form}>
           <TextInput value={message} onChangeText={setMessage} placeholder="Alert message" style={[styles.input, { height: 80 }]} multiline />
@@ -506,14 +509,13 @@ const AlertsManagement = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f0f2f5' },
+  container: { flex: 1, backgroundColor: '#F8F9FA' },
   scroll: { flexGrow: 1, padding: 20 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
-  navButton: { paddingVertical: 6, paddingHorizontal: 12, backgroundColor: '#007bff', borderRadius: 6 },
-  navButtonText: { color: '#fff', fontWeight: 'bold' },
+  headerTitle: { color: '#1F2937', fontSize: 18, fontWeight: '800' },
+  navButton: { paddingVertical: 6, paddingHorizontal: 10, backgroundColor: '#1F2937', borderRadius: 6 },
+  navButtonText: { color: '#fff', fontWeight: '800' },
   refreshButton: { marginLeft: 12 },
-  refreshButtonText: { color: '#007bff', fontWeight: 'bold', fontSize: 18 },
-  title: { fontSize: 20, fontWeight: '700', color: '#333' },
+  refreshButtonText: { color: '#1F2937', fontWeight: '800', fontSize: 18 },
   form: { backgroundColor: '#fff', padding: 16, borderRadius: 10, marginBottom: 24, elevation: 2 },
   input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 6, padding: 10, marginBottom: 12 },
   row: { marginBottom: 12 },

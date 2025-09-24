@@ -122,7 +122,37 @@ router.get('/eta/:busId', auth, async (req, res) => {
       currentStopIndex++; 
     }
     
-    // Calculate remaining distance from current position to all subsequent stops
+    // If route shape exists, project remaining distance along shape to the final stop
+    if (route.shape && (route.shape.type === 'LineString' || route.shape.type === 'MultiLineString')) {
+      const lines = route.shape.type === 'LineString' ? [route.shape.coordinates] : route.shape.coordinates;
+      // Find nearest point on any line to current location, then sum distances to the end
+      let best = { lineIndex: 0, pointIndex: 0, dist: Infinity };
+      const toKm = (a, b) => haversineDistance(a[1], a[0], b[1], b[0]);
+      for (let li = 0; li < lines.length; li++) {
+        const coords = lines[li];
+        for (let pi = 0; pi < coords.length; pi++) {
+          const d = toKm([lng, lat], coords[pi]);
+          if (d < best.dist) best = { lineIndex: li, pointIndex: pi, dist: d };
+        }
+      }
+      // distance from current to nearest point
+      if (best.dist < Infinity) {
+        // Remaining along this line from nearest point to end
+        const currLine = lines[best.lineIndex];
+        for (let i = best.pointIndex; i < currLine.length - 1; i++) {
+          remainingDistance += toKm(currLine[i], currLine[i + 1]);
+        }
+        // Add subsequent lines if MultiLineString
+        for (let li = best.lineIndex + 1; li < lines.length; li++) {
+          const coords = lines[li];
+          for (let i = 0; i < coords.length - 1; i++) {
+            remainingDistance += toKm(coords[i], coords[i + 1]);
+          }
+        }
+      }
+    } else {
+      // Fallback: sum via stops
+      // Calculate remaining distance from current position to all subsequent stops
     if (currentStopIndex !== -1) {
       if (currentStopIndex < stops.length) {
         // Distance to the first relevant stop
@@ -135,6 +165,7 @@ router.get('/eta/:busId', auth, async (req, res) => {
           stops[i + 1].latitude,
           stops[i + 1].longitude
         );
+      }
       }
     }
 

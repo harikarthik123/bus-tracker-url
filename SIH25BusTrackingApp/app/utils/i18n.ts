@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
 
 export type AdminLangCode = 'en' | 'hi' | 'pa' | 'ta';
+export type DriverLangCode = AdminLangCode;
 
 type Dictionary = { [key: string]: string };
 type Translations = { [lang in AdminLangCode]: Dictionary };
@@ -43,6 +44,22 @@ const translations: Translations = {
     'alerts.send': 'Send Alert',
     'alerts.recent': 'Recent Alerts',
     'alerts.bulk': 'Bulk Delete Options',
+
+    // Driver strings
+    'driver.header.title': 'Driver Dashboard',
+    'driver.header.sub': 'Fleet Management',
+    'driver.assigned.title': 'Assigned Vehicle',
+    'driver.labels.busNumber': 'Bus Number:',
+    'driver.labels.registration': 'Registration:',
+    'driver.labels.route': 'Route:',
+    'driver.live.title': 'Live Tracking',
+    'driver.live.toggle': 'GPS Location Tracking',
+    'driver.live.on': 'Your location is being tracked',
+    'driver.live.off': 'Location tracking is disabled',
+    'driver.status.active': 'Active',
+    'driver.alerts.title': 'Active Alerts',
+    'driver.alerts.none.title': 'No active alerts',
+    'driver.alerts.none.sub': 'All systems operating normally',
   },
   hi: {
     'admin.welcome': 'प्रशासन में आपका स्वागत है',
@@ -80,6 +97,22 @@ const translations: Translations = {
     'alerts.send': 'अलर्ट भेजें',
     'alerts.recent': 'हाल के अलर्ट',
     'alerts.bulk': 'बल्क डिलीट विकल्प',
+
+    // Driver strings
+    'driver.header.title': 'ड्राइवर डैशबोर्ड',
+    'driver.header.sub': 'फ्लीट प्रबंधन',
+    'driver.assigned.title': 'आवंटित वाहन',
+    'driver.labels.busNumber': 'बस नंबर:',
+    'driver.labels.registration': 'पंजीकरण:',
+    'driver.labels.route': 'रूट:',
+    'driver.live.title': 'लाइव ट्रैकिंग',
+    'driver.live.toggle': 'जीपीएस लोकेशन ट्रैकिंग',
+    'driver.live.on': 'आपका लोकेशन ट्रैक किया जा रहा है',
+    'driver.live.off': 'लोकेशन ट्रैकिंग बंद है',
+    'driver.status.active': 'सक्रिय',
+    'driver.alerts.title': 'सक्रिय अलर्ट',
+    'driver.alerts.none.title': 'कोई सक्रिय अलर्ट नहीं',
+    'driver.alerts.none.sub': 'सभी सिस्टम सामान्य रूप से चल रहे हैं',
   },
   pa: {
     'admin.welcome': 'ਐਡਮਿਨ ਵਿੱਚ ਸੁਆਗਤ ਹੈ',
@@ -117,6 +150,22 @@ const translations: Translations = {
     'alerts.send': 'ਅਲਰਟ ਭੇਜੋ',
     'alerts.recent': 'ਤਾਜ਼ਾ ਅਲਰਟ',
     'alerts.bulk': 'ਬਲਕ ਮਿਟਾਉ ਵਿਕਲਪ',
+
+    // Driver strings
+    'driver.header.title': 'ਡਰਾਈਵਰ ਡੈਸ਼ਬੋਰਡ',
+    'driver.header.sub': 'ਫਲੀਟ ਪ੍ਰਬੰਧਨ',
+    'driver.assigned.title': 'ਨਿਰਧਾਰਤ ਵਾਹਨ',
+    'driver.labels.busNumber': 'ਬੱਸ ਨੰਬਰ:',
+    'driver.labels.registration': 'ਰਜਿਸਟ੍ਰੇਸ਼ਨ:',
+    'driver.labels.route': 'ਰੂਟ:',
+    'driver.live.title': 'ਲਾਈਵ ਟ੍ਰੈਕਿੰਗ',
+    'driver.live.toggle': 'GPS ਟਿਕਾਣਾ ਟ੍ਰੈਕਿੰਗ',
+    'driver.live.on': 'ਤੁਹਾਡਾ ਟਿਕਾਣਾ ਟ੍ਰੈਕ ਕੀਤਾ ਜਾ ਰਿਹਾ ਹੈ',
+    'driver.live.off': 'ਟਿਕਾਣਾ ਟ੍ਰੈਕਿੰਗ ਬੰਦ ਹੈ',
+    'driver.status.active': 'ਸਕ੍ਰਿਯ',
+    'driver.alerts.title': 'ਸਕ੍ਰਿਯ ਅਲਰਟ',
+    'driver.alerts.none.title': 'ਕੋਈ ਸਕ੍ਰਿਯ ਅਲਰਟ ਨਹੀਂ',
+    'driver.alerts.none.sub': 'ਸਾਰੇ ਸਿਸਟਮ ਆਮ ਤੌਰ ਤੇ ਚੱਲ ਰਹੇ ਹਨ',
   },
   ta: {
     'admin.welcome': 'நிர்வாகத்திற்கு வரவேற்பு',
@@ -154,6 +203,22 @@ const translations: Translations = {
     'alerts.send': 'அறிவிப்பை அனுப்பு',
     'alerts.recent': 'சமீபத்திய அறிவிப்புகள்',
     'alerts.bulk': 'மொத்தமாக நீக்கும் விருப்பங்கள்',
+
+    // Driver strings
+    'driver.header.title': 'டிரைவர் டாஷ்போர்ட்',
+    'driver.header.sub': 'வாகன படை மேலாண்மை',
+    'driver.assigned.title': 'ஒதுக்கப்பட்ட வாகனம்',
+    'driver.labels.busNumber': 'பஸ் எண்:',
+    'driver.labels.registration': 'பதிவு:',
+    'driver.labels.route': 'பாதை:',
+    'driver.live.title': 'நேரடி கண்காணிப்பு',
+    'driver.live.toggle': 'GPS இருப்பிடம் கண்காணிப்பு',
+    'driver.live.on': 'உங்கள் இருப்பிடம் கண்காணிக்கப்படுகிறது',
+    'driver.live.off': 'இருப்பிடம் கண்காணிப்பு முடக்கப்பட்டுள்ளது',
+    'driver.status.active': 'செயலில்',
+    'driver.alerts.title': 'செயலில் உள்ள எச்சரிக்கைகள்',
+    'driver.alerts.none.title': 'எந்த செயலில் உள்ள எச்சரிக்கையும் இல்லை',
+    'driver.alerts.none.sub': 'அனைத்து அமைப்புகளும் சாதாரணமாக இயங்குகின்றன',
   },
 };
 
@@ -205,6 +270,57 @@ export const useAdminI18n = () => {
     lang,
     t: (key: string) => tAdmin(key, lang),
     setLang: (l: AdminLangCode) => setAdminLanguage(l),
+  };
+};
+
+// Driver-specific i18n
+const driverListeners = new Set<(lang: DriverLangCode) => void>();
+let currentDriverLang: DriverLangCode = 'en';
+
+export const initDriverLanguage = async () => {
+  const saved = await AsyncStorage.getItem('driver_lang');
+  if (saved === 'en' || saved === 'hi' || saved === 'pa' || saved === 'ta') {
+    currentDriverLang = saved as DriverLangCode;
+  }
+};
+
+export const getDriverLanguage = (): DriverLangCode => currentDriverLang;
+
+export const setDriverLanguage = async (lang: DriverLangCode) => {
+  currentDriverLang = lang;
+  await AsyncStorage.setItem('driver_lang', lang);
+  driverListeners.forEach((l) => l(lang));
+};
+
+export const subscribeDriverLanguage = (listener: (lang: DriverLangCode) => void) => {
+  driverListeners.add(listener);
+  return () => driverListeners.delete(listener);
+};
+
+export const tDriver = (key: string, lang?: DriverLangCode): string => {
+  const useLang = lang || currentDriverLang;
+  return translations[useLang][key] ?? translations['en'][key] ?? key;
+};
+
+export const useDriverI18n = () => {
+  const [lang, setLangState] = useState<DriverLangCode>(currentDriverLang);
+
+  useEffect(() => {
+    let unsub = () => {};
+    (async () => {
+      if (!currentDriverLang) {
+        await initDriverLanguage();
+      }
+      setLangState(currentDriverLang);
+      unsub = subscribeDriverLanguage((l) => setLangState(l));
+    })();
+    return () => unsub();
+  }, []);
+
+  return {
+    lang,
+    t: (key: string) => tDriver(key, lang),
+    setLang: (l: DriverLangCode) => setDriverLanguage(l),
   };
 };
 

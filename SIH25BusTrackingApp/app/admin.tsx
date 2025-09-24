@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView } fr
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import FloatingAssistant from '../components/FloatingAssistant';
 
 const AdminDashboard = () => {
   const handleLogout = async () => {
@@ -63,6 +64,15 @@ const AdminDashboard = () => {
       color: '#20c997',
       route: '/AdminDashboard/Analytics'
     }
+    ,
+    {
+      id: 'assistant',
+      title: 'Assistant',
+      description: 'Guided help & FAQs',
+      icon: '🤖',
+      color: '#6c757d',
+      route: '/ChatBot'
+    }
   ];
 
   return (
@@ -75,10 +85,7 @@ const AdminDashboard = () => {
         style={styles.header}
       >
         <View style={styles.headerContent}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.appTitle}>BusBee</Text>
-            <Text style={styles.welcomeText}>Admin Dashboard</Text>
-          </View>
+          <View style={styles.headerLeft} />
           <View style={styles.headerRight}>
             <TouchableOpacity style={styles.languageSelector} onPress={handleLogout}>
               <Text style={styles.languageText}>EN</Text>
@@ -95,7 +102,7 @@ const AdminDashboard = () => {
             <TouchableOpacity
               key={feature.id}
               style={styles.featureCard}
-              onPress={() => router.push(feature.route)}
+              onPress={() => router.push(feature.route as any)}
               activeOpacity={0.8}
             >
               <View style={[styles.iconContainer, { backgroundColor: feature.color }]}>
@@ -112,6 +119,10 @@ const AdminDashboard = () => {
           <Text style={styles.logoutButtonText}>Logout</Text>
         </TouchableOpacity>
       </ScrollView>
+      {/* Floating Assistant */}
+      <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 }}>
+        <FloatingAssistant role="admin" />
+      </View>
     </SafeAreaView>
   );
 };
