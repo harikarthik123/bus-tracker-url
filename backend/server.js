@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const path = require('path');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const authRoutes = require('./routes/auth'); // Import auth routes
@@ -36,6 +37,9 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/driver', driverRoutes);
 app.use('/api/location', locationRoutes);
 app.use('/api/passenger', passengerRoutes); // Use passenger routes
+
+// Serve uploaded files (avatars)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Health check endpoint
 app.get('/', (req, res) => {

@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const path = require('path');
 const adminRoutes = require('./routes/admin');
 const driverRoutes = require('./routes/driver');
 const passengerRoutes = require('./routes/passenger'); // Import passenger routes
@@ -24,6 +25,8 @@ mongoose.connect('mongodb://localhost:27017/busTrackingDB', {
 app.use('/api/admin', adminRoutes);
 app.use('/api/driver', driverRoutes);
 app.use('/api/passenger', passengerRoutes); // Mount passenger routes
+// Static hosting for uploaded files (avatars)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Error handling
 app.use((err, req, res, next) => {

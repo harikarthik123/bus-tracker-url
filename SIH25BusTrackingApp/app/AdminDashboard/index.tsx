@@ -109,20 +109,14 @@ const AdminDashboard = () => {
                     </TouchableOpacity>
                 </View>
                 <View style={[styles.drawerInnerWrap, { paddingBottom: spacing }]}>
-                    <View style={[styles.drawerCard, { margin: spacing, padding: Math.max(10, Math.round(spacing * 0.8)) }]}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8 }}>
-                            {LANG_OPTIONS.map(opt => (
-                                <TouchableOpacity key={opt.code} style={{ paddingVertical: 6, paddingHorizontal: 10, borderRadius: 18, backgroundColor: opt.code === lang ? '#F59E0B' : '#F1F5F9', marginLeft: 6 }} onPress={() => selectLanguage(opt.code as any)}>
-                                    <Text style={{ fontWeight: '700', color: opt.code === lang ? '#1F2937' : '#1F2937', fontSize: 12 }}>{opt.label}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
+                <View style={[styles.drawerCard, { margin: spacing, padding: Math.max(10, Math.round(spacing * 0.8)) }]}>
+                        {/* Language selector removed from hamburger drawer as requested */}
                         {CARD_DATA.filter(c => c.key !== 'live').map((card) => (
                             <TouchableOpacity key={card.key} style={[styles.drawerItem, { marginBottom: Math.round(spacing * 0.75) }]} onPress={() => { setLangMenuOpen(false); router.push(card.route as any); }}>
                                 <Text style={styles.drawerItemIcon}>{card.icon}</Text>
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.drawerItemText}>{card.title}</Text>
-                                    {card.sub ? <Text style={styles.drawerItemSub}>{card.sub}</Text> : null}
+                                    {card.sub && card.key !== 'route' ? <Text style={styles.drawerItemSub}>{card.sub}</Text> : null}
                                 </View>
                             </TouchableOpacity>
                         ))}

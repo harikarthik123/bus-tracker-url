@@ -4,7 +4,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { useRouter } from 'expo-router';
 
-const API_URL = 'http://192.168.137.1:5000/api/admin';
+import { API_URLS } from '../../config/api';
+const API_URL = API_URLS.ADMIN;
 
 type Driver = { _id: string; name: string; driverId?: string };
 type RouteType = { _id: string; name: string; stops?: Array<any> };
@@ -89,7 +90,7 @@ export default function Analytics() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}><Text style={styles.backText}>← Back</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}><Text style={styles.backText}>←</Text></TouchableOpacity>
         <Text style={styles.title}>Analytics & Reports</Text>
         <View style={{ width: 70 }} />
       </View>
@@ -161,8 +162,8 @@ export default function Analytics() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f7f9fa' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  backBtn: { paddingVertical: 6, paddingHorizontal: 10, backgroundColor: '#0d6efd', borderRadius: 6 },
-  backText: { color: '#fff', fontWeight: '700' },
+  backBtn: { paddingVertical: 6, paddingHorizontal: 10, backgroundColor: 'transparent', borderRadius: 6, borderWidth: 1, borderColor: '#e5e7eb' },
+  backText: { color: '#1f2d3d', fontWeight: '700' },
   title: { fontSize: 20, fontWeight: '800', color: '#1f2d3d' },
   scroll: { padding: 16 },
   kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 12 },

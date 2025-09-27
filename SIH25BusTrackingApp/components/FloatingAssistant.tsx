@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, PanResponder, StyleSheet, Text, TouchableOpacity, View, Dimensions } from 'react-native';
+import { useLanguage } from '../app/utils/i18n';
 import { useRouter } from 'expo-router';
 
 type Props = {
@@ -8,6 +9,7 @@ type Props = {
 
 export default function FloatingAssistant({ role }: Props) {
   const router = useRouter();
+  const { t } = useLanguage();
   const { width, height } = Dimensions.get('window');
   const margin = 20;
   // Start near bottom-right corner
@@ -49,7 +51,7 @@ export default function FloatingAssistant({ role }: Props) {
       <TouchableOpacity onPress={openChat} activeOpacity={0.9} style={styles.fab}>
         <Text style={styles.emoji}>🤖</Text>
       </TouchableOpacity>
-      <View style={styles.badge}><Text style={styles.badgeText}>{role === 'admin' ? 'Admin' : 'You'}</Text></View>
+      <View style={styles.badge}><Text style={styles.badgeText}>{role === 'admin' ? t('assistant.admin') : t('assistant.you')}</Text></View>
       <Animated.View
         pointerEvents="none"
         style={[

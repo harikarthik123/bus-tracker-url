@@ -1,17 +1,24 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Alert, SafeAreaView, Platform, ScrollView, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Alert, SafeAreaView, Platform, ScrollView, Animated, Easing, Image, StatusBar } from 'react-native';
 import FloatingAssistant from '../components/FloatingAssistant';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import axios from 'axios';
 import * as Location from 'expo-location'; // Import the Location module
 import { useRouter } from 'expo-router';
+import * as Linking from 'expo-linking';
+import { useLanguage } from './utils/i18n';
+import LanguageSelector from '../components/LanguageSelector';
+import { LinearGradient } from 'expo-linear-gradient';
 
 // Backend URLs
-const API_URL = 'http://192.168.137.1:5000/api/passenger';
-const LOCATION_API_URL = 'http://192.168.137.1:5000/api/location';
+import { API_URLS, BASE_ORIGIN } from '../config/api';
+import { useFocusEffect } from '@react-navigation/native';
+const API_URL = API_URLS.PASSENGER;
+const LOCATION_API_URL = API_URLS.LOCATION;
 
 const PassengerDashboard = () => {
+  const { t } = useLanguage();
   const [search, setSearch] = useState('');
   const [buses, setBuses] = useState<any[]>([]);
   const [selectedBus, setSelectedBus] = useState<any>(null);
@@ -35,6 +42,7 @@ const PassengerDashboard = () => {
   const [showNearby, setShowNearby] = useState(false);
   const [busSearch, setBusSearch] = useState('');
   const [showTraffic, setShowTraffic] = useState(false);
+  const [profile, setProfile] = useState<any>(null);
 
   // Data fetching
   useEffect(() => {
@@ -67,6 +75,10 @@ const PassengerDashboard = () => {
 
         getUserLocation();
 
+        // Fetch Profile
+        const meRes = await axios.get(`${API_URL}/me`, { headers: { 'x-auth-token': token } });
+        setProfile(meRes.data);
+
       } catch (error: any) {
         console.error('Error fetching data:', error.message);
         Alert.alert('Error', 'Failed to fetch data. Please check your connection.');
@@ -75,6 +87,21 @@ const PassengerDashboard = () => {
 
     fetchAllData();
   }, []);
+
+  // Refresh profile when screen gains focus
+  useFocusEffect(
+    React.useCallback(() => {
+      (async () => {
+        try {
+          const token = await AsyncStorage.getItem('token');
+          if (!token) return;
+          const meRes = await axios.get(`${API_URL}/me`, { headers: { 'x-auth-token': token } });
+          setProfile(meRes.data);
+        } catch {}
+      })();
+      return () => {};
+    }, [])
+  );
 
   // Search routes
   useEffect(() => {
@@ -99,6 +126,28 @@ const PassengerDashboard = () => {
   const handleLogout = async () => {
     await AsyncStorage.removeItem('token');
     router.replace('/LoginScreen');
+  };
+
+  const handleSOS = () => {
+    Alert.alert(
+      t('passenger.sosTitle'),
+      t('passenger.sosMessage'),
+      [
+        {
+          text: t('common.cancel'),
+          style: 'cancel',
+        },
+        {
+          text: t('passenger.sosCall'),
+          style: 'destructive',
+          onPress: () => {
+            // Use Linking to open the phone dialer with emergency number
+            Linking.openURL('tel:100');
+          },
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   const onRouteSelect = (route: any) => {
@@ -305,20 +354,44 @@ const getFilteredBusLocations = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header with Hamburger + Logout */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.hamburger} onPress={openDrawer}><Text style={styles.hamburgerText}>☰</Text></TouchableOpacity>
-        <Text style={styles.headerTitle}>Passenger Dashboard</Text>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
-      </View>
-      <Animated.ScrollView ref={scrollRef as any} style={{ opacity: fadeIn }}>
+      <StatusBar barStyle="dark-content" />
+      {/* Header with Gradient Background */}
+      <LinearGradient
+        colors={["#F59E0B", "#FDE68A"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.headerGradient}
+      >
+        <Animated.View style={[styles.header, { opacity: fadeIn }]}>
+          <TouchableOpacity style={styles.hamburger} onPress={openDrawer}>
+            <Text style={styles.hamburgerText}>☰</Text>
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>{t('passenger.title')}</Text>
+          </View>
+          <View style={styles.headerRight}>
+            <LanguageSelector style={styles.languageSelector} />
+            <TouchableOpacity style={styles.profileButton} onPress={() => router.push('/PassengerProfile')}>
+              {profile?.avatarUrl ? (
+                <Image 
+                  source={{ uri: profile.avatarUrl.startsWith('http') ? profile.avatarUrl : `${BASE_ORIGIN}${profile.avatarUrl}` }} 
+                  style={styles.profileAvatar} 
+                  resizeMode="cover" 
+                  onError={() => setProfile((p:any) => (p ? { ...p, avatarUrl: null } : p))}
+                />
+              ) : (
+                <Text style={styles.profileIcon}>👤</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </LinearGradient>
+      <Animated.ScrollView ref={scrollRef as any} style={{ opacity: fadeIn }} contentContainerStyle={{ padding: 10 }}>
       {/* Bus Search */}
       <View style={styles.card}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Search your bus (by bus number)..."
+          placeholder={t('passenger.searchBus')}
           value={busSearch}
           onChangeText={setBusSearch}
         />
@@ -338,12 +411,12 @@ const getFilteredBusLocations = () => {
       {/* Selected Route Details */}
       {selectedRoute && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Selected Route</Text>
+          <Text style={styles.cardTitle}>{t('passenger.selectedRoute')}</Text>
           {(() => { const info = getStopsInfo(selectedRoute); return (
             <View>
-              <Text style={{ color: '#1f2937', fontWeight: '600' }}>Start: <Text style={{ fontWeight: '800' }}>{info.start || 'N/A'}</Text></Text>
-              <Text style={{ color: '#1f2937', fontWeight: '600' }}>End: <Text style={{ fontWeight: '800' }}>{info.end || 'N/A'}</Text></Text>
-              <Text style={{ color: '#6b7280' }}>Total stops: {info.count}</Text>
+              <Text style={{ color: '#1f2937', fontWeight: '600' }}>{t('passenger.start')}: <Text style={{ fontWeight: '800' }}>{info.start || 'N/A'}</Text></Text>
+              <Text style={{ color: '#1f2937', fontWeight: '600' }}>{t('passenger.end')}: <Text style={{ fontWeight: '800' }}>{info.end || 'N/A'}</Text></Text>
+              <Text style={{ color: '#6b7280' }}>{t('passenger.totalStops')}: {info.count}</Text>
             </View>
           ); })()}
         </View>
@@ -351,7 +424,7 @@ const getFilteredBusLocations = () => {
 
       {/* Bus Status Filters */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Filter Bus Locations</Text>
+        <Text style={styles.cardTitle}>{t('passenger.filterBus')}</Text>
         <View style={styles.filterContainer}>
           <TouchableOpacity
             style={[
@@ -360,7 +433,7 @@ const getFilteredBusLocations = () => {
             ]}
             onPress={() => setSelectedBusStatus('active')}
           >
-            <Text style={[styles.filterText, selectedBusStatus === 'active' && styles.selectedFilterText]}>Active</Text>
+            <Text style={[styles.filterText, selectedBusStatus === 'active' && styles.selectedFilterText]}>{t('passenger.active')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[
@@ -369,7 +442,7 @@ const getFilteredBusLocations = () => {
             ]}
             onPress={() => setSelectedBusStatus('lastKnown')}
           >
-            <Text style={[styles.filterText, selectedBusStatus === 'lastKnown' && styles.selectedFilterText]}>Last Known</Text>
+            <Text style={[styles.filterText, selectedBusStatus === 'lastKnown' && styles.selectedFilterText]}>{t('passenger.lastKnown')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[
@@ -378,7 +451,7 @@ const getFilteredBusLocations = () => {
             ]}
             onPress={() => setSelectedBusStatus('alert')}
           >
-            <Text style={[styles.filterText, selectedBusStatus === 'alert' && styles.selectedFilterText]}>Alert</Text>
+            <Text style={[styles.filterText, selectedBusStatus === 'alert' && styles.selectedFilterText]}>{t('passenger.alert')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[
@@ -387,20 +460,20 @@ const getFilteredBusLocations = () => {
             ]}
             onPress={() => setSelectedBusStatus('all')}
           >
-            <Text style={[styles.filterText, selectedBusStatus === 'all' && styles.selectedFilterText]}>All</Text>
+            <Text style={[styles.filterText, selectedBusStatus === 'all' && styles.selectedFilterText]}>{t('passenger.all')}</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       {/* Map View */}
       <View style={styles.card} onLayout={(e) => { /* placeholder for potential future use */ }}>
-        <Text style={styles.cardTitle}>Live Bus Locations</Text>
+        <Text style={styles.cardTitle}>{t('passenger.liveBusLocations')}</Text>
         <TouchableOpacity 
           style={styles.mapRefreshButton} 
           onPress={handleMapRefresh}
           disabled={isRefreshing}
         >
-          <Text style={styles.mapRefreshButtonText}>{isRefreshing ? '⟳' : '↻'}</Text>
+          <Text style={styles.mapRefreshButtonText}>{isRefreshing ? t('passenger.refreshing') : t('passenger.refresh')}</Text>
         </TouchableOpacity>
         <MapView
           provider={PROVIDER_GOOGLE}
@@ -449,7 +522,7 @@ const getFilteredBusLocations = () => {
                 <Marker
                   coordinate={{ latitude: selectedRoute.startPointLat, longitude: selectedRoute.startPointLng }}
                   title={selectedRoute.name}
-                  description={`Start: ${selectedRoute.startPoint}`}
+                  description={`${t('passenger.start')}: ${selectedRoute.startPoint}`}
                   pinColor="green"
                 />
               )}
@@ -457,7 +530,7 @@ const getFilteredBusLocations = () => {
                 <Marker
                   coordinate={{ latitude: selectedRoute.endPointLat, longitude: selectedRoute.endPointLng }}
                   title={selectedRoute.name}
-                  description={`End: ${selectedRoute.endPoint}`}
+                  description={`${t('passenger.end')}: ${selectedRoute.endPoint}`}
                   pinColor="red"
                 />
               )}
@@ -467,10 +540,10 @@ const getFilteredBusLocations = () => {
         {selectedBus && (
           <View style={styles.etaBox}>
             <Text style={styles.etaText}>
-              Bus {selectedBus.busNumber} ETA: {selectedBus.eta || 'N/A'} min
+              {t('passenger.bus')} {selectedBus.busNumber} {t('passenger.eta')}: {selectedBus.eta || 'N/A'} min
             </Text>
             <TouchableOpacity style={styles.ivrButton} onPress={handleIVRCall}>
-              <Text style={styles.ivrButtonText}>Call IVR for ETA</Text>
+              <Text style={styles.ivrButtonText}>{t('passenger.callIVR')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -479,7 +552,7 @@ const getFilteredBusLocations = () => {
       {/* Alerts (hidden on home until opened from drawer) */}
       {showAlerts && (
       <View style={styles.card} onLayout={(e) => { alertsY.current = e.nativeEvent.layout.y - 8; }}>
-        <Text style={styles.cardTitle}>Alerts</Text>
+        <Text style={styles.cardTitle}>{t('passenger.alerts')}</Text>
         {alerts.length > 0 ? (
           <FlatList
             data={alerts}
@@ -499,7 +572,7 @@ const getFilteredBusLocations = () => {
             keyExtractor={(item) => item._id}
           />
         ) : (
-          <Text style={styles.noAlerts}>No active alerts</Text>
+          <Text style={styles.noAlerts}>{t('passenger.noActiveAlerts')}</Text>
         )}
       </View>
       )}
@@ -507,7 +580,7 @@ const getFilteredBusLocations = () => {
       {/* Routes (hidden on home until opened from drawer) */}
       {showRoutes && (
       <View style={styles.card} onLayout={(e) => { routesY.current = e.nativeEvent.layout.y - 8; }}>
-        <Text style={styles.cardTitle}>Routes</Text>
+        <Text style={styles.cardTitle}>{t('passenger.routes')}</Text>
         {routes.length > 0 ? (
           <FlatList
             data={routes}
@@ -527,7 +600,7 @@ const getFilteredBusLocations = () => {
             keyExtractor={(item) => item._id}
           />
         ) : (
-          <Text style={styles.noAlerts}>No routes available</Text>
+          <Text style={styles.noAlerts}>{t('passenger.noRoutesAvailable')}</Text>
         )}
       </View>
       )}
@@ -535,7 +608,7 @@ const getFilteredBusLocations = () => {
       {/* Nearby Stops */}
       {showNearby && (
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Nearby Stops</Text>
+        <Text style={styles.cardTitle}>{t('passenger.nearbyStops')}</Text>
         {(() => {
           const stops = routes.flatMap((r:any)=> r.stops || []);
           const list = userLocation ? stops
@@ -550,7 +623,7 @@ const getFilteredBusLocations = () => {
                 </TouchableOpacity>
               )}
             />
-          ) : (<Text style={styles.noAlerts}>Turn on location to see nearby stops</Text>);
+          ) : (<Text style={styles.noAlerts}>{t('passenger.turnOnLocation')}</Text>);
         })()}
       </View>
       )}
@@ -561,29 +634,37 @@ const getFilteredBusLocations = () => {
       )}
       <Animated.View pointerEvents={drawerOpen ? 'auto' : 'none'} style={[styles.drawer, { transform: [{ translateX: drawerX }] }]}>
         <View style={styles.drawerHeaderBar}>
-          <Text style={styles.drawerHeaderTitle}>Menu</Text>
+          <Text style={styles.drawerHeaderTitle}>{t('passenger.menu')}</Text>
           <TouchableOpacity onPress={closeDrawer}><Text style={styles.drawerClose}>✕</Text></TouchableOpacity>
         </View>
         <View style={styles.drawerInnerWrap}>
           <TouchableOpacity style={styles.drawerItem} onPress={goToAlerts}>
             <Text style={styles.drawerItemIcon}>📢</Text>
-            <Text style={styles.drawerItemText}>Alerts</Text>
+            <Text style={styles.drawerItemText}>{t('passenger.alerts')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.drawerItem} onPress={goToRoutes}>
             <Text style={styles.drawerItemIcon}>🗺️</Text>
-            <Text style={styles.drawerItemText}>Routes</Text>
+            <Text style={styles.drawerItemText}>{t('passenger.routes')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.drawerItem} onPress={goToNearbyStops}>
             <Text style={styles.drawerItemIcon}>📍</Text>
-            <Text style={styles.drawerItemText}>Nearby Stops</Text>
+            <Text style={styles.drawerItemText}>{t('passenger.nearbyStops')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.drawerItem} onPress={useMyLocation}>
             <Text style={styles.drawerItemIcon}>🎯</Text>
-            <Text style={styles.drawerItemText}>Use My Location</Text>
+            <Text style={styles.drawerItemText}>{t('passenger.useMyLocation')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.drawerItem} onPress={() => setShowTraffic(v => !v)}>
             <Text style={styles.drawerItemIcon}>🛣️</Text>
-            <Text style={styles.drawerItemText}>{showTraffic ? 'Hide Traffic' : 'Show Traffic'}</Text>
+            <Text style={styles.drawerItemText}>{showTraffic ? t('passenger.hideTraffic') : t('passenger.showTraffic')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.drawerItem, styles.drawerSOSItem]} onPress={handleSOS}>
+            <Text style={styles.drawerItemIcon}>🚨</Text>
+            <Text style={[styles.drawerItemText, styles.drawerSOSText]}>{t('passenger.emergencySOS')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.drawerItem, styles.drawerLogoutItem]} onPress={handleLogout}>
+            <Text style={styles.drawerItemIcon}>🚪</Text>
+            <Text style={[styles.drawerItemText, styles.drawerLogoutText]}>{t('passenger.logout')}</Text>
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -591,7 +672,7 @@ const getFilteredBusLocations = () => {
       {/* Stops timeline for selected route */}
       {selectedRoute && (
         <View style={[styles.card, { paddingTop: 10 }]}> 
-          <Text style={styles.cardTitle}>Stops Timeline</Text>
+          <Text style={styles.cardTitle}>{t('passenger.stopsTimeline')}</Text>
           <View style={{ flexDirection: 'row' }}>
             <View style={styles.timelineRail} />
             <View style={{ flex: 1, marginLeft: 14 }}>
@@ -621,7 +702,7 @@ const getFilteredBusLocations = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFBEB', padding: 10 },
+  container: { flex: 1, backgroundColor: '#FFFBEB' },
   card: {
     backgroundColor: '#fff',
     borderRadius: 10,
@@ -721,23 +802,57 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
+  headerGradient: {
+    paddingTop: 18,
+    paddingBottom: 18,
+    paddingHorizontal: 20,
+  },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
-    paddingHorizontal: 5,
+    justifyContent: 'space-between',
   },
-  hamburger: { paddingVertical: 6, paddingHorizontal: 10, backgroundColor: '#F59E0B', borderRadius: 6 },
-  hamburgerText: { color: '#1F2937', fontWeight: '800' },
-  headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#2c3e50' },
-  logoutButton: {
-    backgroundColor: '#e74c3c',
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 6,
+  hamburger: { 
+    paddingVertical: 8, 
+    paddingHorizontal: 12, 
+    backgroundColor: 'rgba(255, 255, 255, 0.2)', 
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
-  logoutText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+  hamburgerText: { color: '#1F2937', fontWeight: '800', fontSize: 16 },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  headerTitle: { 
+    fontSize: 20, 
+    fontWeight: 'bold', 
+    color: '#1F2937',
+    textAlign: 'center',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  profileButton: { 
+    width: 40, 
+    height: 40, 
+    backgroundColor: 'rgba(255, 255, 255, 0.2)', 
+    borderRadius: 20, 
+    overflow: 'hidden', 
+    borderWidth: 1, 
+    borderColor: 'rgba(255, 255, 255, 0.3)', 
+    alignItems: 'center', 
+    justifyContent: 'center' 
+  },
+  profileIcon: { fontSize: 20, color: '#1F2937' },
+  profileAvatar: { width: 40, height: 40, borderRadius: 20 },
+  drawerSOSItem: { backgroundColor: '#dc3545' },
+  drawerSOSText: { color: '#fff', fontWeight: 'bold' },
+  drawerLogoutItem: { backgroundColor: '#e74c3c' },
+  drawerLogoutText: { color: '#fff' },
   backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.35)' },
   drawer: { position: 'absolute', top: 0, bottom: 0, left: 0, width: 280, backgroundColor: '#FFFFFF', elevation: 8, zIndex: 1001 },
   drawerHeaderBar: { height: 56, backgroundColor: '#F59E0B', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },

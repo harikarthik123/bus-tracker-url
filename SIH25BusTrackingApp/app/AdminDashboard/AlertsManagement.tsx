@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TextInput, TouchableOpacity, FlatList, Alert } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Picker } from '@react-native-picker/picker';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAdminI18n } from '../utils/i18n';
 
-const API_URL = 'http://192.168.137.1:5000/api/admin';
+import { API_URLS } from '../../config/api';
+const API_URL = API_URLS.ADMIN;
 
 const AlertsManagement = () => {
   const { t } = useAdminI18n();
@@ -25,6 +25,10 @@ const AlertsManagement = () => {
   const [cautionReason, setCautionReason] = useState('');
   const [selectedRouteId, setSelectedRouteId] = useState('');
   const [selectedBusId, setSelectedBusId] = useState('');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [bulkBusId, setBulkBusId] = useState('');
+  const [bulkRouteId, setBulkRouteId] = useState('');
+  const [expandedForm, setExpandedForm] = useState<'global' | 'bus' | 'route' | 'caution' | null>(null);
 
   useEffect(() => {
     fetchAlerts();
@@ -270,234 +274,318 @@ const AlertsManagement = () => {
     return 'Global';
   };
 
-  const renderItem = ({ item }: any) => (
-    <View style={[
-      styles.alertItem,
-      item.alertType === 'caution' && styles.cautionAlertItem
-    ]}>
-      <View style={styles.alertContent}>
-        {item.alertType === 'caution' && (
-          <View style={styles.cautionHeader}>
-            <Text style={styles.cautionIcon}>⚠️</Text>
-            <Text style={styles.cautionBadge}>CAUTION ALERT</Text>
+  const renderItem = ({ item }: any) => {
+    const isCaution = item.alertType === 'caution';
+    const isBus = !isCaution && !!item.busId;
+    const isRoute = !isCaution && !!item.routeId;
+    const isExpanded = expandedId === item._id;
+
+    return (
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={() => setExpandedId(prev => (prev === item._id ? null : item._id))}
+        style={[
+        styles.alertCard,
+        isCaution && styles.cardCaution,
+        isBus && styles.cardBus,
+        isRoute && styles.cardRoute,
+      ]}
+      >
+        <View style={styles.cardHeader}>
+          <Text style={[styles.cardIcon, isCaution && styles.iconCaution, isBus && styles.iconBus, isRoute && styles.iconRoute]}>
+            {isCaution ? '⚠️' : isBus ? '🚌' : isRoute ? '🗺️' : '📢'}
+          </Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardTitle} numberOfLines={1}>
+              {isCaution ? 'Caution Alert' : isBus ? 'Bus Announcement' : isRoute ? 'Route Announcement' : 'Announcement'}
+            </Text>
+            <Text style={styles.cardSubtitle} numberOfLines={1}>{describeAlert(item)}</Text>
           </View>
-        )}
-        <Text style={[
-          styles.alertMessage,
-          item.alertType === 'caution' && styles.cautionMessage
-        ]}>
+          {isExpanded && (
+            <TouchableOpacity 
+              style={styles.deleteButton} 
+              onPress={() => handleDeleteAlert(item._id)}
+            >
+              <Text style={styles.deleteButtonText}>🗑️</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <Text style={[styles.cardMessage, isCaution && styles.cautionMessage]} numberOfLines={isExpanded ? 0 : 2}>
           {item.message}
         </Text>
-        <Text style={styles.alertMeta}>{describeAlert(item)}</Text>
-        {item.alertType === 'caution' && item.reason && (
-          <Text style={styles.cautionReason}>
-            <Text style={styles.cautionReasonLabel}>Reason: </Text>
-            {item.reason}
-          </Text>
+
+        {isExpanded && isCaution && item.reason ? (
+          <View style={styles.reasonPill}>
+            <Text style={styles.reasonPillLabel}>Reason</Text>
+            <Text style={styles.reasonPillText}>{item.reason}</Text>
+          </View>
+        ) : null}
+
+        {isExpanded && (
+          <Text style={styles.cardTime}>{new Date(item.createdAt).toLocaleString()}</Text>
         )}
-        <Text style={styles.alertTime}>{new Date(item.createdAt).toLocaleString()}</Text>
-      </View>
-      <View style={styles.alertActions}>
-        <TouchableOpacity 
-          style={styles.deleteButton} 
-          onPress={() => handleDeleteAlert(item._id)}
-        >
-          <Text style={styles.deleteButtonText}>🗑️</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-      <LinearGradient colors={["#F59E0B", "#FDE68A"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingVertical: 12 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 }}>
-          <TouchableOpacity style={styles.navButton} onPress={() => router.back()}>
-            <Text style={styles.navButtonText}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{t('screen.alerts.title')}</Text>
-          <TouchableOpacity 
-            style={styles.refreshButton} 
-            onPress={() => {
-              fetchAlerts();
-              fetchBuses();
-              fetchRoutes();
-              Alert.alert('Success', 'Data refreshed successfully');
-            }}
-          >
-            <Text style={styles.refreshButtonText}>🔄</Text>
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.navButton} onPress={() => router.back()}>
+          <Text style={styles.navButtonText}>←</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{t('screen.alerts.title')}</Text>
+        <TouchableOpacity 
+          style={styles.refreshButton} 
+          onPress={() => {
+            fetchAlerts();
+            fetchBuses();
+            fetchRoutes();
+            Alert.alert('Success', 'Data refreshed successfully');
+          }}
+        >
+          <Text style={styles.refreshButtonText}>🔄</Text>
+        </TouchableOpacity>
+      </View>
       <ScrollView contentContainerStyle={styles.scroll}>
 
         <View style={styles.form}>
-          <TextInput value={message} onChangeText={setMessage} placeholder="Alert message" style={[styles.input, { height: 80 }]} multiline />
-          <View style={styles.row}>
-            <Text style={styles.label}>Type</Text>
-            <Picker selectedValue={alertType} onValueChange={(v) => setAlertType(v)} style={styles.picker}>
-              <Picker.Item label="Global" value="global" />
-              <Picker.Item label="Bus" value="bus" />
-              <Picker.Item label="Route" value="route" />
-              <Picker.Item label="⚠️ Caution Alert" value="caution" />
-            </Picker>
-          </View>
-          {alertType !== 'global' && alertType !== 'caution' && (
-            <View style={styles.row}>
-              <Text style={styles.label}>{alertType === 'bus' ? 'Bus' : 'Route'}</Text>
-              {alertType === 'bus' ? (
-                <>
-                  <Picker selectedValue={targetId} onValueChange={setTargetId} style={styles.picker}>
-                    <Picker.Item label="Select Bus by ID (optional)" value="" />
-                    {buses.map(b => <Picker.Item key={b._id} label={`Bus ${b.busNumber} (${b.regNo})`} value={b._id} />)}
-                  </Picker>
-                  <Text style={{ marginVertical: 6, color: '#666' }}>Or enter directly:</Text>
-                  <TextInput placeholder="Bus Number (optional)" value={busNumber} onChangeText={setBusNumber} style={styles.input} />
-                  <TextInput placeholder="Bus Reg. No (optional)" value={regNo} onChangeText={setRegNo} style={styles.input} />
-                </>
-              ) : (
+          {/* Global Card */}
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => { setExpandedForm(expandedForm === 'global' ? null : 'global'); setAlertType('global'); }}
+            style={[styles.formCard, expandedForm === 'global' && styles.formCardActive]}
+          >
+            <View style={styles.formCardHeader}>
+              <Text style={styles.formCardIcon}>📢</Text>
+              <Text style={styles.formCardTitle}>Global Alert</Text>
+            </View>
+            {expandedForm === 'global' && (
+              <View>
+                <TextInput value={message} onChangeText={setMessage} placeholder="Alert message" style={[styles.input, { height: 80 }]} multiline />
+                <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
+                  <Text style={styles.sendText}>{t('alerts.send')}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* Bus Card */}
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => { setExpandedForm(expandedForm === 'bus' ? null : 'bus'); setAlertType('bus'); }}
+            style={[styles.formCard, expandedForm === 'bus' && styles.formCardActive]}
+          >
+            <View style={styles.formCardHeader}>
+              <Text style={styles.formCardIcon}>🚌</Text>
+              <Text style={styles.formCardTitle}>Bus Alert</Text>
+            </View>
+            {expandedForm === 'bus' && (
+              <View>
+                <TextInput value={message} onChangeText={setMessage} placeholder="Alert message" style={[styles.input, { height: 80 }]} multiline />
+                <Picker selectedValue={targetId} onValueChange={setTargetId} style={styles.picker}>
+                  <Picker.Item label="Select Bus by ID (optional)" value="" />
+                  {buses.map(b => <Picker.Item key={b._id} label={`Bus ${b.busNumber} (${b.regNo})`} value={b._id} />)}
+                </Picker>
+                <Text style={{ marginVertical: 6, color: '#666' }}>Or enter directly:</Text>
+                <TextInput placeholder="Bus Number (optional)" value={busNumber} onChangeText={setBusNumber} style={styles.input} />
+                <TextInput placeholder="Bus Reg. No (optional)" value={regNo} onChangeText={setRegNo} style={styles.input} />
+                <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
+                  <Text style={styles.sendText}>{t('alerts.send')}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* Route Card */}
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => { setExpandedForm(expandedForm === 'route' ? null : 'route'); setAlertType('route'); }}
+            style={[styles.formCard, expandedForm === 'route' && styles.formCardActive]}
+          >
+            <View style={styles.formCardHeader}>
+              <Text style={styles.formCardIcon}>🗺️</Text>
+              <Text style={styles.formCardTitle}>Route Alert</Text>
+            </View>
+            {expandedForm === 'route' && (
+              <View>
+                <TextInput value={message} onChangeText={setMessage} placeholder="Alert message" style={[styles.input, { height: 80 }]} multiline />
                 <Picker selectedValue={targetId} onValueChange={setTargetId} style={styles.picker}>
                   <Picker.Item label="Select..." value="" />
                   {routes.map(r => <Picker.Item key={r._id} label={r.name} value={r._id} />)}
                 </Picker>
-              )}
+                <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
+                  <Text style={styles.sendText}>{t('alerts.send')}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* Caution Card */}
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => { setExpandedForm(expandedForm === 'caution' ? null : 'caution'); setAlertType('caution'); }}
+            style={[styles.formCard, expandedForm === 'caution' && styles.formCardActive]}
+          >
+            <View style={styles.formCardHeader}>
+              <Text style={styles.formCardIcon}>⚠️</Text>
+              <Text style={styles.formCardTitle}>Caution Alert</Text>
             </View>
-          )}
-
-          {alertType === 'caution' && (
-            <View style={styles.cautionSection}>
-              <Text style={styles.cautionTitle}>⚠️ Caution Alert Details</Text>
-              
-              {/* Route Selection */}
-              <View style={styles.cautionRow}>
-                <Text style={styles.cautionLabel}>Route Name *</Text>
-                <Picker 
-                  selectedValue={selectedRouteId} 
-                  onValueChange={(value) => {
-                    setSelectedRouteId(value);
-                    if (value) {
-                      const selectedRoute = routes.find(r => r._id === value);
-                      setCautionRouteName(selectedRoute?.name || '');
-                    } else {
-                      setCautionRouteName('');
-                    }
-                  }} 
-                  style={styles.cautionPicker}
-                >
-                  <Picker.Item label="Select Route..." value="" />
-                  {routes.map(route => (
-                    <Picker.Item 
-                      key={route._id} 
-                      label={route.name} 
-                      value={route._id} 
+            {expandedForm === 'caution' && (
+              <View>
+                <TextInput value={message} onChangeText={setMessage} placeholder="Alert message" style={[styles.input, { height: 80 }]} multiline />
+                <View style={styles.cautionSection}>
+                  <Text style={styles.cautionTitle}>Caution Alert Details</Text>
+                  <View style={styles.cautionRow}>
+                    <Text style={styles.cautionLabel}>Route Name *</Text>
+                    <Picker 
+                      selectedValue={selectedRouteId} 
+                      onValueChange={(value) => {
+                        setSelectedRouteId(value);
+                        if (value) {
+                          const selectedRoute = routes.find(r => r._id === value);
+                          setCautionRouteName(selectedRoute?.name || '');
+                        } else {
+                          setCautionRouteName('');
+                        }
+                      }} 
+                      style={styles.cautionPicker}
+                    >
+                      <Picker.Item label="Select Route..." value="" />
+                      {routes.map(route => (
+                        <Picker.Item 
+                          key={route._id} 
+                          label={route.name} 
+                          value={route._id} 
+                        />
+                      ))}
+                    </Picker>
+                    <Text style={styles.cautionOrText}>OR</Text>
+                    <TextInput 
+                      placeholder="Enter Route Name Manually *" 
+                      value={cautionRouteName} 
+                      onChangeText={(text) => {
+                        setCautionRouteName(text);
+                        if (text) setSelectedRouteId('');
+                      }} 
+                      style={styles.input} 
                     />
-                  ))}
-                </Picker>
-                <Text style={styles.cautionOrText}>OR</Text>
-                <TextInput 
-                  placeholder="Enter Route Name Manually *" 
-                  value={cautionRouteName} 
-                  onChangeText={(text) => {
-                    setCautionRouteName(text);
-                    if (text) setSelectedRouteId(''); // Clear dropdown if manual input
-                  }} 
-                  style={styles.input} 
-                />
-              </View>
-
-              {/* Bus Selection */}
-              <View style={styles.cautionRow}>
-                <Text style={styles.cautionLabel}>Bus Number *</Text>
-                <Picker 
-                  selectedValue={selectedBusId} 
-                  onValueChange={(value) => {
-                    setSelectedBusId(value);
-                    if (value) {
-                      const selectedBus = buses.find(b => b._id === value);
-                      setCautionBusNumber(selectedBus?.busNumber || '');
-                    } else {
-                      setCautionBusNumber('');
-                    }
-                  }} 
-                  style={styles.cautionPicker}
-                >
-                  <Picker.Item label="Select Bus..." value="" />
-                  {buses.map(bus => (
-                    <Picker.Item 
-                      key={bus._id} 
-                      label={`Bus ${bus.busNumber} (${bus.regNo})`} 
-                      value={bus._id} 
+                  </View>
+                  <View style={styles.cautionRow}>
+                    <Text style={styles.cautionLabel}>Bus Number *</Text>
+                    <Picker 
+                      selectedValue={selectedBusId} 
+                      onValueChange={(value) => {
+                        setSelectedBusId(value);
+                        if (value) {
+                          const selectedBus = buses.find(b => b._id === value);
+                          setCautionBusNumber(selectedBus?.busNumber || '');
+                        } else {
+                          setCautionBusNumber('');
+                        }
+                      }} 
+                      style={styles.cautionPicker}
+                    >
+                      <Picker.Item label="Select Bus..." value="" />
+                      {buses.map(bus => (
+                        <Picker.Item 
+                          key={bus._id} 
+                          label={`Bus ${bus.busNumber} (${bus.regNo})`} 
+                          value={bus._id} 
+                        />
+                      ))}
+                    </Picker>
+                    <Text style={styles.cautionOrText}>OR</Text>
+                    <TextInput 
+                      placeholder="Enter Bus Number Manually *" 
+                      value={cautionBusNumber} 
+                      onChangeText={(text) => {
+                        setCautionBusNumber(text);
+                        if (text) setSelectedBusId('');
+                      }} 
+                      style={styles.input} 
                     />
-                  ))}
-                </Picker>
-                <Text style={styles.cautionOrText}>OR</Text>
-                <TextInput 
-                  placeholder="Enter Bus Number Manually *" 
-                  value={cautionBusNumber} 
-                  onChangeText={(text) => {
-                    setCautionBusNumber(text);
-                    if (text) setSelectedBusId(''); // Clear dropdown if manual input
-                  }} 
-                  style={styles.input} 
-                />
+                  </View>
+                  <View style={styles.cautionRow}>
+                    <Text style={styles.cautionLabel}>Reason for Caution Alert *</Text>
+                    <TextInput 
+                      placeholder="Enter the reason for this caution alert..." 
+                      value={cautionReason} 
+                      onChangeText={setCautionReason} 
+                      style={[styles.input, { height: 80 }]} 
+                      multiline 
+                    />
+                  </View>
+                  <Text style={styles.cautionNote}>
+                    * Required fields for caution alerts. Use dropdowns to select from database or enter manually.
+                  </Text>
+                </View>
+                <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
+                  <Text style={styles.sendText}>{t('alerts.send')}</Text>
+                </TouchableOpacity>
               </View>
-
-              {/* Reason */}
-              <View style={styles.cautionRow}>
-                <Text style={styles.cautionLabel}>Reason for Caution Alert *</Text>
-                <TextInput 
-                  placeholder="Enter the reason for this caution alert..." 
-                  value={cautionReason} 
-                  onChangeText={setCautionReason} 
-                  style={[styles.input, { height: 80 }]} 
-                  multiline 
-                />
-              </View>
-
-              <Text style={styles.cautionNote}>
-                * Required fields for caution alerts. Use dropdowns to select from database or enter manually.
-              </Text>
-            </View>
-          )}
-          <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
-            <Text style={styles.sendText}>{t('alerts.send')}</Text>
+            )}
           </TouchableOpacity>
         </View>
 
         {/* Bulk Delete Options */}
         <View style={styles.bulkDeleteSection}>
           <Text style={styles.section}>{t('alerts.bulk')}</Text>
-          <View style={styles.bulkDeleteButtons}>
-            <TouchableOpacity 
-              style={[styles.bulkDeleteButton, styles.globalDeleteButton]} 
-              onPress={handleDeleteGlobalAlerts}
-            >
-              <Text style={styles.bulkDeleteButtonText}>Delete All Global Alerts</Text>
-            </TouchableOpacity>
-            
-            {buses.map(bus => (
-              <TouchableOpacity 
-                key={bus._id}
-                style={[styles.bulkDeleteButton, styles.busDeleteButton]} 
-                onPress={() => handleDeleteBusAlerts(bus._id)}
-              >
-                <Text style={styles.bulkDeleteButtonText}>
-                  Delete All Alerts for {bus.busNumber}
-                </Text>
+          <View style={styles.bulkDeleteGrid}>
+            {/* Global Card */}
+            <View style={[styles.bulkCard, styles.bulkCardGlobal]}>
+              <View style={styles.bulkCardHeader}>
+                <Text style={styles.bulkCardIcon}>📢</Text>
+                <Text style={styles.bulkCardTitle}>Global Alerts</Text>
+              </View>
+              <Text style={styles.bulkCardHelp}>Delete all global announcements</Text>
+              <TouchableOpacity style={[styles.bulkDeleteBtn, styles.globalDeleteBtn]} onPress={handleDeleteGlobalAlerts}>
+                <Text style={styles.bulkDeleteBtnText}>Delete All</Text>
               </TouchableOpacity>
-            ))}
-            
-            {routes.map(route => (
+            </View>
+
+            {/* Bus Card */}
+            <View style={[styles.bulkCard, styles.bulkCardBus]}>
+              <View style={styles.bulkCardHeader}>
+                <Text style={styles.bulkCardIcon}>🚌</Text>
+                <Text style={styles.bulkCardTitle}>Bus Alerts</Text>
+              </View>
+              <Picker selectedValue={bulkBusId} onValueChange={setBulkBusId} style={styles.bulkPicker}>
+                <Picker.Item label="Select Bus..." value="" />
+                {buses.map(b => (
+                  <Picker.Item key={b._id} label={`Bus ${b.busNumber}${b.regNo ? ` (${b.regNo})` : ''}`} value={b._id} />
+                ))}
+              </Picker>
               <TouchableOpacity 
-                key={route._id}
-                style={[styles.bulkDeleteButton, styles.routeDeleteButton]} 
-                onPress={() => handleDeleteRouteAlerts(route._id)}
+                style={[styles.bulkDeleteBtn, styles.busDeleteBtn, !bulkBusId && styles.disabledBtn]} 
+                disabled={!bulkBusId}
+                onPress={() => bulkBusId && handleDeleteBusAlerts(bulkBusId)}
               >
-                <Text style={styles.bulkDeleteButtonText}>
-                  Delete All Alerts for {route.name}
-                </Text>
+                <Text style={styles.bulkDeleteBtnText}>Delete All For Bus</Text>
               </TouchableOpacity>
-            ))}
+            </View>
+
+            {/* Route Card */}
+            <View style={[styles.bulkCard, styles.bulkCardRoute]}>
+              <View style={styles.bulkCardHeader}>
+                <Text style={styles.bulkCardIcon}>🗺️</Text>
+                <Text style={styles.bulkCardTitle}>Route Alerts</Text>
+              </View>
+              <Picker selectedValue={bulkRouteId} onValueChange={setBulkRouteId} style={styles.bulkPicker}>
+                <Picker.Item label="Select Route..." value="" />
+                {routes.map(r => (
+                  <Picker.Item key={r._id} label={r.name} value={r._id} />
+                ))}
+              </Picker>
+              <TouchableOpacity 
+                style={[styles.bulkDeleteBtn, styles.routeDeleteBtn, !bulkRouteId && styles.disabledBtn]} 
+                disabled={!bulkRouteId}
+                onPress={() => bulkRouteId && handleDeleteRouteAlerts(bulkRouteId)}
+              >
+                <Text style={styles.bulkDeleteBtnText}>Delete All For Route</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -511,12 +599,18 @@ const AlertsManagement = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FA' },
   scroll: { flexGrow: 1, padding: 20 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
   headerTitle: { color: '#1F2937', fontSize: 18, fontWeight: '800' },
-  navButton: { paddingVertical: 6, paddingHorizontal: 10, backgroundColor: '#1F2937', borderRadius: 6 },
-  navButtonText: { color: '#fff', fontWeight: '800' },
+  navButton: { paddingVertical: 6, paddingHorizontal: 10, backgroundColor: 'transparent', borderRadius: 6, borderWidth: 1, borderColor: '#e5e7eb' },
+  navButtonText: { color: '#1F2937', fontWeight: '800' },
   refreshButton: { marginLeft: 12 },
   refreshButtonText: { color: '#1F2937', fontWeight: '800', fontSize: 18 },
   form: { backgroundColor: '#fff', padding: 16, borderRadius: 10, marginBottom: 24, elevation: 2 },
+  formCard: { backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 12, borderLeftWidth: 4, borderLeftColor: '#e5e7eb', elevation: 1 },
+  formCardActive: { borderLeftColor: '#0d6efd', elevation: 2 },
+  formCardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  formCardIcon: { fontSize: 18, marginRight: 8 },
+  formCardTitle: { fontSize: 16, fontWeight: '800', color: '#1f2d3d' },
   input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 6, padding: 10, marginBottom: 12 },
   row: { marginBottom: 12 },
   label: { marginBottom: 6, fontWeight: '600', color: '#333' },
@@ -525,24 +619,41 @@ const styles = StyleSheet.create({
   sendText: { color: '#fff', fontWeight: 'bold' },
   section: { fontSize: 18, fontWeight: '700', marginBottom: 10 },
   bulkDeleteSection: { backgroundColor: '#fff', padding: 16, borderRadius: 10, marginBottom: 24, elevation: 2 },
-  bulkDeleteButtons: { gap: 8 },
-  bulkDeleteButton: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: 6, alignItems: 'center' },
-  globalDeleteButton: { backgroundColor: '#dc3545' },
-  busDeleteButton: { backgroundColor: '#fd7e14' },
-  routeDeleteButton: { backgroundColor: '#6f42c1' },
-  bulkDeleteButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
-  alertItem: { 
-    backgroundColor: '#fff', 
-    padding: 12, 
-    borderRadius: 8, 
-    marginBottom: 10, 
-    elevation: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center'
+  bulkDeleteGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  bulkCard: { width: '48%', backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 12, elevation: 1, borderLeftWidth: 4, borderLeftColor: '#0d6efd' },
+  bulkCardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  bulkCardIcon: { fontSize: 18, marginRight: 8 },
+  bulkCardTitle: { fontSize: 14, fontWeight: '800', color: '#1f2d3d', flex: 1 },
+  bulkCardHelp: { fontSize: 12, color: '#6c757d', marginBottom: 8 },
+  bulkCardGlobal: { borderLeftColor: '#0d6efd' },
+  bulkCardBus: { borderLeftColor: '#198754' },
+  bulkCardRoute: { borderLeftColor: '#6f42c1' },
+  bulkDeleteBtn: { alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6 },
+  globalDeleteBtn: { backgroundColor: '#dc3545' },
+  busDeleteBtn: { backgroundColor: '#fd7e14' },
+  routeDeleteBtn: { backgroundColor: '#6f42c1' },
+  bulkDeleteBtnText: { color: '#fff', fontWeight: 'bold' },
+  bulkPicker: { backgroundColor: '#f8f8f8', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 6, marginBottom: 8 },
+  disabledBtn: { opacity: 0.5 },
+  alertCard: {
+    backgroundColor: '#fff',
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 12,
+    elevation: 2,
+    borderLeftWidth: 4,
+    borderLeftColor: '#0d6efd'
   },
-  alertContent: { flex: 1 },
-  alertActions: { marginLeft: 12 },
+  cardCaution: { borderLeftColor: '#ffc107', backgroundColor: '#fffef4' },
+  cardBus: { borderLeftColor: '#198754' },
+  cardRoute: { borderLeftColor: '#6f42c1' },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  cardIcon: { fontSize: 18, marginRight: 10 },
+  iconCaution: { },
+  iconBus: { },
+  iconRoute: { },
+  cardTitle: { fontSize: 16, fontWeight: '800', color: '#1f2d3d' },
+  cardSubtitle: { fontSize: 12, color: '#6c757d' },
   deleteButton: { 
     padding: 8, 
     backgroundColor: '#dc3545', 
@@ -551,9 +662,8 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   deleteButtonText: { fontSize: 16 },
-  alertMessage: { fontSize: 16, color: '#333' },
-  alertMeta: { fontSize: 12, color: '#007bff', marginTop: 4 },
-  alertTime: { fontSize: 12, color: '#666', marginTop: 4 },
+  cardMessage: { fontSize: 15, color: '#2c3e50', marginBottom: 6 },
+  cardTime: { fontSize: 12, color: '#6c757d', marginTop: 2 },
   cautionSection: {
     backgroundColor: '#fff3cd',
     padding: 12,
@@ -574,46 +684,13 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginTop: 8,
   },
-  cautionAlertItem: {
-    backgroundColor: '#fff3cd',
-    borderWidth: 1,
-    borderColor: '#ffeaa7',
-  },
-  cautionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  cautionIcon: {
-    fontSize: 16,
-    marginRight: 8,
-  },
-  cautionBadge: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#856404',
-    backgroundColor: '#ffeaa7',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
   cautionMessage: {
     color: '#856404',
     fontWeight: '600',
   },
-  cautionReason: {
-    fontSize: 14,
-    color: '#856404',
-    marginTop: 4,
-    backgroundColor: '#fff',
-    padding: 8,
-    borderRadius: 4,
-    borderLeftWidth: 3,
-    borderLeftColor: '#ffc107',
-  },
-  cautionReasonLabel: {
-    fontWeight: 'bold',
-  },
+  reasonPill: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, backgroundColor: '#fff', borderWidth: 1, borderColor: '#ffeaa7', paddingVertical: 6, paddingHorizontal: 8, borderRadius: 6, marginBottom: 4 },
+  reasonPillLabel: { fontSize: 12, color: '#856404', fontWeight: '800', backgroundColor: '#fff3cd', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  reasonPillText: { fontSize: 13, color: '#856404' },
   cautionRow: {
     marginBottom: 16,
   },

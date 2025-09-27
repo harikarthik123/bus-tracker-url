@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TextInput, TouchableOpacity, FlatList, Alert } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useOnline } from '../utils/useOnline';
 import { useAdminI18n } from '../utils/i18n';
@@ -9,7 +10,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import { enqueueRequest } from '../utils/outbox';
 
-const API_URL = 'http://192.168.137.1:5000/api/admin'; // Base API URL for admin management
+import { API_URLS } from '../../config/api';
+const API_URL = API_URLS.ADMIN;
 
 type Driver = {
   _id: string;
@@ -47,6 +49,7 @@ const BusManagement = () => {
   const [editingBusId, setEditingBusId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAll, setShowAll] = useState(false);
+  const [activeCard, setActiveCard] = useState<'add' | 'view' | 'upload' | null>(null);
 
   useEffect(() => {
     fetchBuses();
@@ -238,13 +241,30 @@ const BusManagement = () => {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.navButton} onPress={() => router.back()}>
-          <Text style={styles.navButtonText}>← Back</Text>
+          <Text style={styles.navButtonText}>←</Text>
         </TouchableOpacity>
         <Text style={styles.title}>{t('screen.bus.title')}</Text>
         <View style={{ width: 80 }} />
       </View>
       <ScrollView contentContainerStyle={styles.scrollContent}>
 
+        {/* Cards grid */}
+        <View style={styles.cardRow}>
+          <TouchableOpacity style={[styles.cardItem, styles.cardAdd, activeCard === 'add' && styles.cardItemActive]} onPress={() => setActiveCard('add')}>
+            <MaterialIcons name="directions-bus" size={28} color="#ffffff" />
+            <Text style={[styles.cardLabel, { color: '#ffffff' }]}>Add Bus</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.cardItem, styles.cardView, activeCard === 'view' && styles.cardItemActive]} onPress={() => setActiveCard('view')}>
+            <MaterialIcons name="list" size={28} color="#ffffff" />
+            <Text style={[styles.cardLabel, { color: '#ffffff' }]}>View Buses</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.cardItem, styles.cardUpload, activeCard === 'upload' && styles.cardItemActive]} onPress={() => setActiveCard('upload')}>
+            <MaterialIcons name="file-upload" size={28} color="#ffffff" />
+            <Text style={[styles.cardLabel, { color: '#ffffff' }]}>Upload File</Text>
+          </TouchableOpacity>
+        </View>
+
+        {(activeCard === 'add' || editingBusId) && (
         <View style={styles.formContainer}>
           <TextInput
             style={styles.input}
@@ -295,15 +315,22 @@ const BusManagement = () => {
             </Text>
           </TouchableOpacity>
         </View>
+        )}
 
-        <Text style={styles.listTitle}>Existing Buses</Text>
+        {activeCard === 'upload' && (
         <View style={styles.uploadBox}>
           <Text style={styles.uploadTitle}>File Upload (CSV/XLSX)</Text>
-          <Text style={styles.uploadHint}>Required: busNumber, reg_no, capacity. Optional: route_id/route_name, driverId</Text>
-          <TouchableOpacity style={[styles.actionButton, styles.createButton]} onPress={handleUploadCsv}>
+          <Text style={styles.uploadHint}>Required: busNumber, regNo, capacity. Optional: routeName, driverId</Text>
+          <TouchableOpacity style={[styles.actionButton, styles.createButton, { flexDirection: 'row', alignItems: 'center', gap: 8 }]} onPress={handleUploadCsv}>
+            <MaterialIcons name="file-upload" size={18} color="#1F2937" />
             <Text style={styles.buttonText}>Upload CSV</Text>
           </TouchableOpacity>
         </View>
+        )}
+
+        {activeCard === 'view' && (
+        <>
+        <Text style={styles.listTitle}>Existing Buses</Text>
         <TextInput
           style={styles.input}
           placeholder={"Search by bus number or reg no"}
@@ -326,6 +353,8 @@ const BusManagement = () => {
           ListEmptyComponent={<Text>No buses added yet.</Text>}
           style={styles.busList}
         />
+        </>
+        )}
 
       </ScrollView>
     </SafeAreaView>
@@ -352,12 +381,12 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 6,
-    backgroundColor: '#F59E0B',
+    backgroundColor: '#000000',
     marginHorizontal: 4,
     elevation: 2,
   },
   navButtonText: {
-    color: '#fff',
+    color: '#ffffff',
     fontWeight: 'bold',
     fontSize: 15,
   },
@@ -366,6 +395,13 @@ const styles = StyleSheet.create({
     padding: 20,
     alignItems: 'center',
   },
+  cardRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', width: '100%', marginTop: 20 },
+  cardItem: { borderRadius: 12, paddingVertical: 18, alignItems: 'center', justifyContent: 'center', elevation: 2, margin: 8, minWidth: 110, maxWidth: 160, flexGrow: 0 },
+  cardItemActive: { borderColor: '#F59E0B', borderWidth: 2 },
+  cardLabel: { marginTop: 8, fontWeight: '800' },
+  cardAdd: { backgroundColor: '#10b981', paddingHorizontal: 14 },
+  cardView: { backgroundColor: '#3b82f6', paddingHorizontal: 14 },
+  cardUpload: { backgroundColor: '#f59e0b', paddingHorizontal: 14 },
   title: {
     fontSize: 26,
     fontWeight: 'bold',

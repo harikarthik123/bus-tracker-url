@@ -117,14 +117,14 @@ router.post('/drivers', auth, async (req, res) => {
 });
 
 // @route   POST api/admin/drivers/bulk
-// @desc    File upload drivers (CSV/XLSX). Required: driverId, name, email. Optional: password, busId|busNumber|regNo
+// @desc    File upload drivers (CSV/XLSX). Required: driverId, name, email, password, busId|busNumber|regNo
 // @access  Private (Admin only)
 router.post('/drivers/bulk', auth, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ msg: 'file is required (multipart field name: file)' });
     const results = [];
     const records = await parseUploadToRecords(req.file.buffer, req.file.originalname, req.file.mimetype);
-    const required = ['driverid', 'name', 'email'];
+    const required = ['driverid', 'name', 'email', 'password'];
     for (let i = 0; i < records.length; i++) {
       const rr = records[i];
       const r = {
@@ -162,12 +162,21 @@ router.post('/drivers/bulk', auth, upload.single('file'), async (req, res) => {
         await user.save();
         results.push({ email: r.email, action: 'updated', id: user._id });
       } else {
-        let hashed = null;
-        if (r.password) {
-          const salt = await bcrypt.genSalt(10);
-          hashed = await bcrypt.hash(String(r.password), salt);
+        // Password is now required for new drivers
+        if (!r.password) {
+          return res.status(400).json({ msg: `Row ${i + 1}: Password is required for new drivers` });
         }
-        user = new User({ name: r.name, email: r.email, password: hashed || 'ChangeMe123!', role: 'driver', driverId: r.driverid, busId: resolvedBusId });
+        const salt = await bcrypt.genSalt(10);
+        const hashed = await bcrypt.hash(String(r.password), salt);
+        
+        user = new User({ 
+          name: r.name, 
+          email: r.email, 
+          password: hashed, 
+          role: 'driver', 
+          driverId: r.driverid, 
+          busId: resolvedBusId 
+        });
         await user.save();
         results.push({ email: r.email, action: 'created', id: user._id });
       }
@@ -303,7 +312,7 @@ router.post('/buses', auth, async (req, res) => {
 });
 
 // @route   POST api/admin/buses/bulk
-// @desc    File upload buses (CSV/XLSX). Required: busNumber, regNo, capacity. Optional: routeId|route_name, driverId
+// @desc    File upload buses (CSV/XLSX). Required: busNumber, regNo, capacity, routeId|route_name, driverId
 // @access  Private (Admin only)
 router.post('/buses/bulk', auth, upload.single('file'), async (req, res) => {
   try {
@@ -323,17 +332,26 @@ router.post('/buses/bulk', auth, upload.single('file'), async (req, res) => {
         driverid: rr.driverid ?? rr.driver_id ?? rr.driverId,
       };
       requireColumns(r, required, i);
+      // Route is optional
       let routeRef = null;
       if (r.routeid && mongoose.Types.ObjectId.isValid(String(r.routeid))) {
         routeRef = String(r.routeid);
       } else if (r.routename) {
         const route = await Route.findOne({ name: String(r.routename) });
-        routeRef = route ? route._id : null;
+        if (!route) {
+          return res.status(400).json({ msg: `Row ${i + 1}: Route '${r.routename}' not found` });
+        }
+        routeRef = route._id;
       }
+      
+      // Driver is optional
       let driverRef = null;
       if (r.driverid) {
         const drv = await User.findOne({ driverId: String(r.driverid) });
-        driverRef = drv ? drv._id : null;
+        if (!drv) {
+          return res.status(400).json({ msg: `Row ${i + 1}: Driver with ID '${r.driverid}' not found` });
+        }
+        driverRef = drv._id;
       }
       const existing = await Bus.findOne({ regNo: String(r.regno) });
       if (existing) {
@@ -452,7 +470,7 @@ router.post('/routes', auth, async (req, res) => {
 });
 
 // @route   POST api/admin/routes/bulk
-// @desc    File upload routes (CSV/XLSX). Required per row: name, stop_name, latitude, longitude, order. Optional: route_id, duration
+// @desc    File upload routes (CSV/XLSX). Required per row: name, stop_name, latitude, longitude, order, duration
 // @access  Private (Admin only)
 router.post('/routes/bulk', auth, upload.single('file'), async (req, res) => {
   try {
@@ -482,6 +500,7 @@ router.post('/routes/bulk', auth, upload.single('file'), async (req, res) => {
       if (!routesMap.has(key)) routesMap.set(key, { name: routeName, stops: [], duration: r.duration });
       const payload = routesMap.get(key);
       payload.stops.push(stop);
+      // Duration is now required for each route
       if (r.duration && !payload.duration) payload.duration = r.duration;
     });
 
@@ -494,7 +513,11 @@ router.post('/routes/bulk', auth, upload.single('file'), async (req, res) => {
         await existing.save();
         results.push({ routeName: payload.name, action: 'updated', id: existing._id });
       } else {
-        const route = new Route({ name: payload.name, duration: payload.duration || '', stops: payload.stops.sort((a, b) => a.order - b.order) });
+        const route = new Route({ 
+          name: payload.name, 
+          duration: payload.duration || '', 
+          stops: payload.stops.sort((a, b) => a.order - b.order) 
+        });
         await route.save();
         results.push({ routeName: payload.name, action: 'created', id: route._id });
       }

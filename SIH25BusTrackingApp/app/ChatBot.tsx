@@ -1,75 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLanguage } from './utils/i18n';
 
 type Role = 'admin' | 'passenger';
 type Msg = { id: string; from: 'bot' | 'user'; text: string };
 
-const QUICK_TOPICS: Record<Role, { key: string; label: string }[]> = {
-  admin: [
-    { key: 'routes', label: 'Manage Routes & Stops' },
-    { key: 'buses', label: 'Assign Buses & Drivers' },
-    { key: 'live', label: 'Driver Live Locations' },
-    { key: 'reports', label: 'Reports & Analytics' },
-    { key: 'offline', label: 'Offline & Sync' },
-    { key: 'faq', label: 'FAQs' },
-  ],
-  passenger: [
-    { key: 'live', label: 'Live Bus Location' },
-    { key: 'eta', label: 'Check ETA' },
-    { key: 'search', label: 'Search Routes & Stops' },
-    { key: 'notify', label: 'Notifications & Alerts' },
-    { key: 'offline', label: 'Offline Mode' },
-    { key: 'faq', label: 'FAQs' },
-  ],
-};
-
-const RESPONSES: Record<string, string[]> = {
-  // Admin
-  routes: [
-    'Add a route: Admin > Route Management > enter name, duration, draw route on map, add stops > Add Route.',
-    'Edit/delete: open a route card > Edit or Delete.',
-    'Bulk/file upload: use File Upload to import stops per route. Accepted: CSV/XLSX.',
-    'Add a new stop quickly: switch to Add Stops mode on the map and tap to place.',
-  ],
-  buses: [
-    'Add bus: Admin > Bus Management > bus number, reg. no, capacity > Add Bus.',
-    'Assign driver/route: pick from dropdowns while adding/editing a bus.',
-    'File upload: CSV/XLSX with busNumber, reg_no, capacity, optional route_id/route_name, driverId.',
-  ],
-  live: [
-    'Live monitoring: Admin > Live Monitoring shows driver locations updated from the driver app.',
-    'Troubleshooting: ensure driver is online with GPS enabled. Last known location may display when offline.',
-  ],
-  reports: [
-    'Reports include route usage, occupancy, and driver performance (if enabled).',
-    'Export options depend on your deployment. Ask for enablement if missing.',
-  ],
-  offline: [
-    'Offline mode uses an Outbox. Your actions queue locally and sync when online.',
-    'You can add/update entities offline; they will be sent automatically later.',
-  ],
-  faq: [
-    'Why is a bus not moving? The driver may be offline or has GPS disabled; map shows last update.',
-    'How to add a stop? Route Management > Add Stops mode > tap map > Save.',
-    'How to test offline on mobile? Disable network; perform actions; reconnect to see them sync.',
-  ],
-  // Passenger
-  eta: [
-    'ETA combines planned route timing with recent driver location updates.',
-    'If the driver is offline, ETA uses last known position and schedule as fallback.',
-  ],
-  search: [
-    'Search by route name or stop: open the search bar and type; results filter as you type.',
-  ],
-  notify: [
-    'Enable notifications to get arrival/delay alerts for selected routes and stops.',
-  ],
-};
+// Dynamic multilingual responses using translation system
 
 export default function ChatBot() {
   const router = useRouter();
   const params = useLocalSearchParams() as any;
+  const { t } = useLanguage();
   const initialRole: Role = (params?.role === 'passenger' ? 'passenger' : 'admin');
   const [role, setRole] = useState<Role>(initialRole);
   const [topic, setTopic] = useState<string | null>(null);
@@ -78,8 +20,28 @@ export default function ChatBot() {
   const [dots, setDots] = useState<number>(0);
   const typingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const topics = useMemo(() => QUICK_TOPICS[role], [role]);
-  const content = topic ? RESPONSES[topic] || [] : [];
+  const topics = useMemo(() => {
+    const topicKeys = role === 'admin' 
+      ? ['routes', 'buses', 'live', 'reports', 'offline', 'faq']
+      : ['live', 'eta', 'search', 'notify', 'offline', 'faq'];
+    
+    return topicKeys.map(key => ({
+      key,
+      label: t(`chatbot.${role}.${key}`)
+    }));
+  }, [role, t]);
+
+  const getResponses = (topicKey: string) => {
+    const responses = [];
+    let i = 1;
+    while (t(`chatbot.responses.${role}.${topicKey}.${i}`) !== `chatbot.responses.${role}.${topicKey}.${i}`) {
+      responses.push(t(`chatbot.responses.${role}.${topicKey}.${i}`));
+      i++;
+    }
+    return responses;
+  };
+
+  const content = topic ? getResponses(topic) : [];
 
   useEffect(() => {
     if (isTyping) {
@@ -106,25 +68,29 @@ export default function ChatBot() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backText}>← Back</Text>
+          <Text style={styles.backText}>{t('chatbot.back')}</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Assistant</Text>
+        <Text style={styles.title}>{t('chatbot.title')}</Text>
         <View style={{ width: 70 }} />
       </View>
 
-      {/* Role header (language selection removed) */}
+      {/* Role header */}
       <View style={styles.welcomeBox}>
-        <Text style={styles.welcomeTitle}>{role === 'admin' ? 'Welcome, Admin 👋' : 'Welcome aboard 👋'}</Text>
-        <Text style={styles.welcomeSub}>{role === 'admin' ? 'Guide to manage routes, buses, drivers, and reports.' : 'Guide to live tracking, ETA, search, and alerts.'}</Text>
+        <Text style={styles.welcomeTitle}>
+          {role === 'admin' ? t('chatbot.welcomeAdmin') : t('chatbot.welcomePassenger')}
+        </Text>
+        <Text style={styles.welcomeSub}>
+          {role === 'admin' ? t('chatbot.subtitleAdmin') : t('chatbot.subtitlePassenger')}
+        </Text>
       </View>
 
-      <Text style={styles.sectionLabel}>How can I help?</Text>
+      <Text style={styles.sectionLabel}>{t('chatbot.howCanIHelp')}</Text>
       <View style={styles.quickRow}>
         {topics.map((t) => (
           <TouchableOpacity key={t.key} style={styles.quickChip} onPress={() => {
             setTopic(t.key);
             setMessages(prev => [...prev, { id: `${Date.now()}-user`, from: 'user', text: t.label }]);
-            const steps = RESPONSES[t.key] || [];
+            const steps = getResponses(t.key);
             setIsTyping(true);
             steps.forEach((line, idx) => {
               setTimeout(() => setMessages(prev2 => [...prev2, { id: `${Date.now()}-bot-${idx}`, from: 'bot', text: line }]), 400 * (idx + 1));
@@ -161,18 +127,18 @@ export default function ChatBot() {
       {!!topic && (
         <View style={[styles.actionRow, { paddingHorizontal: 16, marginBottom: 10 }] }>
           <TouchableOpacity style={styles.primaryBtn} onPress={() => {
-            setMessages(prev => [...prev, { id: `${Date.now()}-u2`, from: 'user', text: 'Show Tutorial' }]);
-            const steps = RESPONSES[topic] || [];
+            setMessages(prev => [...prev, { id: `${Date.now()}-u2`, from: 'user', text: t('chatbot.showTutorial') }]);
+            const steps = getResponses(topic);
             setIsTyping(true);
             steps.forEach((line, idx) => {
               setTimeout(() => setMessages(prev2 => [...prev2, { id: `${Date.now()}-t${idx}`, from: 'bot', text: `Step ${idx+1}: ${line}` }]), 450 * (idx + 1));
             });
             setTimeout(() => setIsTyping(false), 450 * steps.length + 350);
           }}>
-            <Text style={styles.primaryBtnText}>Show Tutorial</Text>
+            <Text style={styles.primaryBtnText}>{t('chatbot.showTutorial')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.secondaryBtn} onPress={() => { setTopic(null); setMessages([]); }}>
-            <Text style={styles.secondaryBtnText}>Clear</Text>
+            <Text style={styles.secondaryBtnText}>{t('chatbot.clear')}</Text>
           </TouchableOpacity>
         </View>
       )}

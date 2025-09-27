@@ -8,7 +8,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useDriverI18n } from './utils/i18n';
 import { useOnline } from './utils/useOnline';
 // Assuming your backend is running on http://bus-tracker-url.onrender.com
-const API_URL = 'http://192.168.137.1:5000/api/driver'; 
+import { API_URLS } from '../config/api';
+const API_URL = API_URLS.DRIVER; 
 const DriverDashboard = () => {
   const router = useRouter();
   const { t, lang, setLang } = useDriverI18n();

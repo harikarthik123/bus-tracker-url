@@ -6,10 +6,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { useLanguage } from './utils/i18n';
+import LanguageSelector from '../components/LanguageSelector';
 
-const API_URL = 'http://192.168.137.1:5000/api/auth'; // Replace with your backend URL
+import { API_URLS } from '../config/api';
+const API_URL = API_URLS.AUTH;
 
 const LoginScreen = () => {
+  const { t } = useLanguage();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
@@ -80,7 +84,7 @@ const LoginScreen = () => {
           router.replace('/PassengerDashboard');
         } catch (error: any) {
           console.error('Login Error:', error.response?.data?.msg || error.message); // Add this line
-          Alert.alert('Login Failed', error.response?.data?.msg || 'Invalid phone number.');
+          Alert.alert(t('login.loginFailed'), error.response?.data?.msg || t('login.invalidPhone'));
         }
       } else {
         const response = await axios.post(`${API_URL}/login`, { email, password, role });
@@ -107,15 +111,15 @@ const LoginScreen = () => {
       } else if (err instanceof Error) {
         message = err.message;
       }
-      Alert.alert('Login Failed', message);
+      Alert.alert(t('login.loginFailed'), message);
     }
   };
 
   return (
     <ThemedView style={styles.container}>
       <Animated.View style={[styles.headerContainer, { opacity: headerOpacity, transform: [{ translateY: headerTranslate }] }]}>
-        <ThemedText type="title" style={styles.title}>Welcome back</ThemedText>
-        <ThemedText type="subtitle" style={[styles.subtitle, { color: roleAccent }]}>Sign in to continue</ThemedText>
+        <ThemedText type="title" style={styles.title}>{t('login.welcome')}</ThemedText>
+        <ThemedText type="subtitle" style={[styles.subtitle, { color: roleAccent }]}>{t('login.subtitle')}</ThemedText>
       </Animated.View>
 
       <View style={styles.roleToggle} onLayout={onToggleLayout}>
@@ -134,30 +138,30 @@ const LoginScreen = () => {
           style={[styles.roleButton, role === 'admin' && styles.selectedRoleButton]}
           onPress={() => setRole('admin')}
         >
-          <ThemedText style={[styles.roleButtonText, role === 'admin' && styles.selectedRoleButtonText]}>Admin</ThemedText>
+          <ThemedText style={[styles.roleButtonText, role === 'admin' && styles.selectedRoleButtonText]}>{t('common.admin')}</ThemedText>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.roleButton, role === 'driver' && styles.selectedRoleButton]}
           onPress={() => setRole('driver')}
         >
-          <ThemedText style={[styles.roleButtonText, role === 'driver' && styles.selectedRoleButtonText]}>Driver</ThemedText>
+          <ThemedText style={[styles.roleButtonText, role === 'driver' && styles.selectedRoleButtonText]}>{t('common.driver')}</ThemedText>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.roleButton, role === 'passenger' && styles.selectedRoleButton]}
           onPress={() => setRole('passenger')}
         >
-          <ThemedText style={[styles.roleButtonText, role === 'passenger' && styles.selectedRoleButtonText]}>Passenger</ThemedText>
+          <ThemedText style={[styles.roleButtonText, role === 'passenger' && styles.selectedRoleButtonText]}>{t('common.passenger')}</ThemedText>
         </TouchableOpacity>
       </View>
 
       <Animated.View style={[styles.cardContainer, { opacity: cardOpacity, transform: [{ translateY: cardTranslate }] }]}>
-        <ThemedText style={styles.loginAsText}>Login as {role}</ThemedText>
+        <ThemedText style={styles.loginAsText}>{t('login.loginAs', { role: t(`common.${role}`) })}</ThemedText>
 
         {role !== 'passenger' ? (
           <>
             <TextInput
               style={styles.input}
-              placeholder="Email"
+              placeholder={t('login.emailPlaceholder')}
               placeholderTextColor={border}
               value={email}
               onChangeText={setEmail}
@@ -166,7 +170,7 @@ const LoginScreen = () => {
             />
             <TextInput
               style={styles.input}
-              placeholder="Password"
+              placeholder={t('login.passwordPlaceholder')}
               placeholderTextColor={border}
               value={password}
               onChangeText={setPassword}
@@ -176,7 +180,7 @@ const LoginScreen = () => {
         ) : (
           <TextInput
             style={styles.input}
-            placeholder="Phone Number"
+            placeholder={t('login.phonePlaceholder')}
             placeholderTextColor={border}
             value={phone}
             onChangeText={setPhone}
@@ -196,18 +200,22 @@ const LoginScreen = () => {
               Animated.spring(buttonScale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 6 }).start();
             }}
           >
-            <ThemedText style={styles.loginButtonText}>Login</ThemedText>
+            <ThemedText style={styles.loginButtonText}>{t('login.loginButton')}</ThemedText>
           </TouchableOpacity>
         </Animated.View>
 
         {role === 'passenger' && (
           <View style={styles.signUpContainer}>
-            <ThemedText style={styles.signUpText}>Don't have an account? </ThemedText>
+            <ThemedText style={styles.signUpText}>{t('login.signupPrompt')}</ThemedText>
             <TouchableOpacity onPress={() => router.push('/PassengerSignupScreen')}>
-              <ThemedText style={styles.signUpLink}>Sign Up</ThemedText>
+              <ThemedText style={styles.signUpLink}>{t('login.signupLink')}</ThemedText>
             </TouchableOpacity>
           </View>
         )}
+
+        <View style={styles.languageSelectorContainer}>
+          <LanguageSelector />
+        </View>
       </Animated.View>
     </ThemedView>
   );
@@ -321,6 +329,10 @@ const getStyles = (c: { tint: string; textColor: string; background: string; bor
       fontSize: 14,
       color: c.tint,
       fontWeight: 'bold',
+    },
+    languageSelectorContainer: {
+      marginTop: 16,
+      alignItems: 'center',
     },
   });
 export default LoginScreen;

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TextInput, TouchableOpacity, FlatList, Alert, Platform, Dimensions } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useOnline } from '../utils/useOnline';
 import { useAdminI18n } from '../utils/i18n';
@@ -10,7 +11,8 @@ import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Picker } from '@react-native-picker/picker';
 import * as DocumentPicker from 'expo-document-picker';
 
-const API_URL = 'http://192.168.137.1:5000/api/admin'; // Base API URL for admin management
+import { API_URLS } from '../../config/api';
+const API_URL = API_URLS.ADMIN;
 
 const { width, height } = Dimensions.get('window');
 const ASPECT_RATIO = width / height;
@@ -58,6 +60,8 @@ const RouteManagement = () => {
   const [mapMode, setMapMode] = useState<'route' | 'stop' | null>(null); // 'route' or 'stop'
   const [searchQuery, setSearchQuery] = useState('');
   const [showAll, setShowAll] = useState(false);
+  const [activeCard, setActiveCard] = useState<'add' | 'view' | 'upload' | null>(null);
+  const [expandedRoutes, setExpandedRoutes] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchRoutes();
@@ -238,42 +242,97 @@ const RouteManagement = () => {
     }
   };
 
-  const renderRouteItem = ({ item }: { item: any }) => (
-    <View style={styles.routeItem}>
-      <View>
-        <Text style={styles.routeName}>{item.name}</Text>
-        <Text style={styles.routeDetails}>Duration: {item.duration}</Text>
-        <Text style={styles.routeDetails}>Stops:</Text>
-        {item.stops.map((stop: any, index: number) => (
-          <Text key={index} style={styles.stopText}>  {stop.order}. {stop.name} (Lat: {stop.latitude}, Lng: {stop.longitude})</Text>
-        ))}
-        <Text style={styles.routeDetails}>Route Points:</Text>
-        {item.routeCoordinates?.map((coord: any, index: number) => (
-          <Text key={`coord-${index}`} style={styles.stopText}>  {index + 1}. Lat: {coord.latitude}, Lng: {coord.longitude}</Text>
-        ))}
+  const toggleRouteExpansion = (routeId: string) => {
+    setExpandedRoutes(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(routeId)) {
+        newSet.delete(routeId);
+      } else {
+        newSet.add(routeId);
+      }
+      return newSet;
+    });
+  };
+
+  const renderRouteItem = ({ item }: { item: any }) => {
+    const isExpanded = expandedRoutes.has(item._id);
+    
+    return (
+      <View style={styles.routeItem}>
+        <View style={styles.routeContent}>
+          <TouchableOpacity 
+            style={styles.routeHeader} 
+            onPress={() => toggleRouteExpansion(item._id)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.routeHeaderLeft}>
+              <Text style={styles.routeName}>{item.name}</Text>
+              <Text style={styles.routeDetails}>Duration: {item.duration}</Text>
+            </View>
+            <Text style={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</Text>
+          </TouchableOpacity>
+          
+          {isExpanded && (
+            <View style={styles.routeDetailsContainer}>
+              <Text style={styles.routeDetails}>Stops ({item.stops?.length || 0}):</Text>
+              {item.stops?.slice(0, 5).map((stop: any, index: number) => (
+                <Text key={index} style={styles.stopText}>  {stop.order}. {stop.name} (Lat: {stop.latitude.toFixed(4)}, Lng: {stop.longitude.toFixed(4)})</Text>
+              ))}
+              {item.stops?.length > 5 && (
+                <Text style={styles.moreText}>... and {item.stops.length - 5} more stops</Text>
+              )}
+              
+              <Text style={styles.routeDetails}>Route Points ({item.routeCoordinates?.length || 0}):</Text>
+              {item.routeCoordinates?.slice(0, 3).map((coord: any, index: number) => (
+                <Text key={`coord-${index}`} style={styles.stopText}>  {index + 1}. Lat: {coord.latitude.toFixed(4)}, Lng: {coord.longitude.toFixed(4)}</Text>
+              ))}
+              {item.routeCoordinates?.length > 3 && (
+                <Text style={styles.moreText}>... and {item.routeCoordinates.length - 3} more points</Text>
+              )}
+            </View>
+          )}
+        </View>
+        
+        <View style={styles.routeActions}>
+          <TouchableOpacity style={styles.editButton} onPress={() => handleEditRoute(item)}>
+            <Text style={styles.buttonText}>Edit</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteRoute(item._id)}>
+            <Text style={styles.buttonText}>Delete</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-      <View style={styles.routeActions}>
-        <TouchableOpacity style={styles.editButton} onPress={() => handleEditRoute(item)}>
-          <Text style={styles.buttonText}>Edit</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteRoute(item._id)}>
-          <Text style={styles.buttonText}>Delete</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <View style={styles.safeArea}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.navButton} onPress={() => router.back()}>
-          <Text style={styles.navButtonText}>← Back</Text>
+          <Text style={styles.navButtonText}>←</Text>
         </TouchableOpacity>
         <Text style={styles.title}>{t('screen.route.title')}</Text>
         <View style={{ width: 80 }} />
       </View>
       <ScrollView contentContainerStyle={styles.scrollContent}>
 
+        {/* Cards grid */}
+        <View style={styles.cardRow}>
+          <TouchableOpacity style={[styles.cardItem, styles.cardAdd, activeCard === 'add' && styles.cardItemActive]} onPress={() => setActiveCard('add')}>
+            <MaterialIcons name="add-road" size={28} color="#ffffff" />
+            <Text style={[styles.cardLabel, { color: '#ffffff' }]}>Add Route</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.cardItem, styles.cardView, activeCard === 'view' && styles.cardItemActive]} onPress={() => setActiveCard('view')}>
+            <MaterialIcons name="map" size={28} color="#ffffff" />
+            <Text style={[styles.cardLabel, { color: '#ffffff' }]}>View Routes</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.cardItem, styles.cardUpload, activeCard === 'upload' && styles.cardItemActive]} onPress={() => setActiveCard('upload')}>
+            <MaterialIcons name="file-upload" size={28} color="#ffffff" />
+            <Text style={[styles.cardLabel, { color: '#ffffff' }]}>Upload File</Text>
+          </TouchableOpacity>
+        </View>
+
+        {(activeCard === 'add' || editingRouteId) && (
         <View style={styles.formContainer}>
           <TextInput
             style={styles.input}
@@ -294,13 +353,13 @@ const RouteManagement = () => {
               style={[styles.mapModeButton, mapMode === 'route' && styles.activeMapMode]}
               onPress={() => setMapMode('route')}
             >
-              <Text style={styles.buttonText}>Draw Route</Text>
+              <Text style={mapMode === 'route' ? styles.activeMapModeText : styles.mapModeText}>Draw Route</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.mapModeButton, mapMode === 'stop' && styles.activeMapMode]}
               onPress={() => setMapMode('stop')}
             >
-              <Text style={styles.buttonText}>Add Stops</Text>
+              <Text style={mapMode === 'stop' ? styles.activeMapModeText : styles.mapModeText}>Add Stops</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.clearMapButton}
@@ -368,22 +427,32 @@ const RouteManagement = () => {
             </Text>
           </TouchableOpacity>
         </View>
+        )}
 
-        <Text style={styles.listTitle}>Existing Routes</Text>
+        {activeCard === 'upload' && (
+        <>
         <View style={styles.uploadBox}>
           <Text style={styles.uploadTitle}>File Upload (CSV/XLSX)</Text>
-          <Text style={styles.uploadHint}>Required per row: route_name, stop_name, lat, lng, sequence. Optional: duration</Text>
-          <TouchableOpacity style={[styles.actionButton, styles.createButton]} onPress={handleUploadCsv}>
+          <Text style={styles.uploadHint}>Required per row: name, stopName, latitude, longitude, order. Optional: duration</Text>
+          <TouchableOpacity style={[styles.actionButton, styles.createButton, { flexDirection: 'row', alignItems: 'center', gap: 8 }]} onPress={handleUploadCsv}>
+            <MaterialIcons name="file-upload" size={18} color="#1F2937" />
             <Text style={styles.buttonText}>Upload CSV</Text>
           </TouchableOpacity>
         </View>
         <View style={styles.uploadBox}>
           <Text style={styles.uploadTitle}>Route Shape Upload (GeoJSON/GPX)</Text>
           <Text style={styles.uploadHint}>File field name: file. Max size: 10 MB. Uses current Route Name.</Text>
-          <TouchableOpacity style={[styles.actionButton, styles.createButton]} onPress={handleUploadShape}>
+          <TouchableOpacity style={[styles.actionButton, styles.createButton, { flexDirection: 'row', alignItems: 'center', gap: 8 }]} onPress={handleUploadShape}>
+            <MaterialIcons name="polyline" size={18} color="#1F2937" />
             <Text style={styles.buttonText}>Upload Shape</Text>
           </TouchableOpacity>
         </View>
+        </>
+        )}
+
+        {activeCard === 'view' && (
+        <>
+        <Text style={styles.listTitle}>Existing Routes</Text>
         <TextInput
           style={styles.input}
           placeholder="Search routes by name"
@@ -406,6 +475,8 @@ const RouteManagement = () => {
           ListEmptyComponent={<Text>No routes added yet.</Text>}
           style={styles.routeList}
         />
+        </>
+        )}
 
       </ScrollView>
     </View>
@@ -433,12 +504,12 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 6,
-    backgroundColor: '#F59E0B',
+    backgroundColor: '#000000',
     marginHorizontal: 4,
     elevation: 2,
   },
   navButtonText: {
-    color: '#fff',
+    color: '#ffffff',
     fontWeight: 'bold',
     fontSize: 15,
   },
@@ -447,6 +518,13 @@ const styles = StyleSheet.create({
     padding: 20,
     alignItems: 'center',
   },
+  cardRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', width: '100%', marginTop: 20 },
+  cardItem: { borderRadius: 12, paddingVertical: 18, alignItems: 'center', justifyContent: 'center', elevation: 2, margin: 8, minWidth: 110, maxWidth: 160, flexGrow: 0 },
+  cardItemActive: { borderColor: '#F59E0B', borderWidth: 2 },
+  cardLabel: { marginTop: 8, fontWeight: '800' },
+  cardAdd: { backgroundColor: '#10b981', paddingHorizontal: 14 },
+  cardView: { backgroundColor: '#3b82f6', paddingHorizontal: 14 },
+  cardUpload: { backgroundColor: '#f59e0b', paddingHorizontal: 14 },
   title: {
     fontSize: 26,
     fontWeight: 'bold',
@@ -501,6 +579,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F59E0B',
     borderColor: '#F59E0B',
   },
+  mapModeText: { color: '#1F2937', fontWeight: '700' },
+  activeMapModeText: { color: '#1F2937', fontWeight: '800' },
   clearMapButton: {
     backgroundColor: '#dc3545',
     paddingVertical: 10,
@@ -587,9 +667,38 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
+    flexDirection: 'column',
+  },
+  routeContent: {
+    flex: 1,
+    marginBottom: 10,
+  },
+  routeHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: 5,
+  },
+  routeHeaderLeft: {
+    flex: 1,
+  },
+  expandIcon: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: 'bold',
+    marginLeft: 10,
+  },
+  routeDetailsContainer: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  moreText: {
+    fontSize: 12,
+    color: '#999',
+    fontStyle: 'italic',
+    marginTop: 5,
   },
   routeName: {
     fontSize: 18,
@@ -603,6 +712,8 @@ const styles = StyleSheet.create({
   },
   routeActions: {
     flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   editButton: {
     backgroundColor: '#ffc107',

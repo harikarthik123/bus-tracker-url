@@ -4,7 +4,8 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 
-const API_URL = 'http://192.168.137.1:5000/api/auth'; // Update with your API URL
+import { API_URLS } from '../config/api';
+const API_URL = API_URLS.AUTH;
 
 const PassengerLogin = () => {
   const router = useRouter();

@@ -7,8 +7,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { useAdminI18n } from '../utils/i18n';
 
-const ADMIN_API_URL = 'http://192.168.137.1:5000/api/admin';
-const LOCATION_API_URL = 'http://192.168.137.1:5000/api/location';
+import { API_URLS } from '../../config/api';
+const ADMIN_API_URL = API_URLS.ADMIN;
+const LOCATION_API_URL = API_URLS.LOCATION;
 
   const { width, height } = Dimensions.get('window');
   const spacing = Math.max(10, Math.min(18, Math.round(width * 0.04)));

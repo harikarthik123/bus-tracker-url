@@ -3,38 +3,42 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'reac
 import { router } from 'expo-router';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLanguage } from './utils/i18n';
+import LanguageSelector from '../components/LanguageSelector';
 
-const API_URL = 'http://192.168.137.1:5000/api/auth'; // Replace with your backend URL
+import { API_URLS } from '../config/api';
+const API_URL = API_URLS.AUTH;
 
 const PassengerSignupScreen = () => {
+  const { t } = useLanguage();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
 
   const handleSignup = async () => {
     try {
       const response = await axios.post(`${API_URL}/register-passenger`, { name, phone });
-      Alert.alert('Signup Successful', 'You can now login with your phone number.');
+      Alert.alert(t('signup.success'), t('signup.successMessage'));
       router.replace('/LoginScreen'); // Navigate back to login after signup
     } catch (error: any) {
       console.error(error);
-      Alert.alert('Signup Failed', error.response?.data?.msg || 'An error occurred during signup.');
+      Alert.alert(t('signup.failed'), error.response?.data?.msg || t('signup.errorMessage'));
     }
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Passenger Sign Up</Text>
+      <Text style={styles.title}>{t('signup.title')}</Text>
 
       <TextInput
         style={styles.input}
-        placeholder="Name"
+        placeholder={t('signup.namePlaceholder')}
         value={name}
         onChangeText={setName}
         autoCapitalize="words"
       />
       <TextInput
         style={styles.input}
-        placeholder="Phone Number"
+        placeholder={t('signup.phonePlaceholder')}
         value={phone}
         onChangeText={setPhone}
         keyboardType="phone-pad"
@@ -42,12 +46,16 @@ const PassengerSignupScreen = () => {
       />
 
       <TouchableOpacity style={styles.signupButton} onPress={handleSignup}>
-        <Text style={styles.signupButtonText}>Sign Up</Text>
+        <Text style={styles.signupButtonText}>{t('signup.signupButton')}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity onPress={() => router.replace('/LoginScreen')}>
-        <Text style={styles.loginLink}>Already have an account? Login</Text>
+        <Text style={styles.loginLink}>{t('signup.loginPrompt')}</Text>
       </TouchableOpacity>
+
+      <View style={styles.languageSelectorContainer}>
+        <LanguageSelector />
+      </View>
     </View>
   );
 };
@@ -94,6 +102,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#D97706', // Orange text
     fontWeight: 'bold',
+  },
+  languageSelectorContainer: {
+    marginTop: 20,
+    alignItems: 'center',
   },
 });
 

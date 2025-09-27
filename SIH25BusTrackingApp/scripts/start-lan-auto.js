@@ -24,11 +24,11 @@ function pickBestLanIp() {
 		}
 	}
 
-	// Prefer 192.168.x.x, then 10.x.x.x, then 172.16-31.x.x
-	const pref192 = candidates.find(c => c.address.startsWith('192.168.'));
-	if (pref192) return pref192.address;
+	// Prefer 10.x.x.x, then 192.168.x.x, then 172.16-31.x.x
 	const pref10 = candidates.find(c => c.address.startsWith('10.'));
 	if (pref10) return pref10.address;
+	const pref192 = candidates.find(c => c.address.startsWith('192.168.'));
+	if (pref192) return pref192.address;
 	const pref172 = candidates.find(c => isPrivate172(c.address));
 	if (pref172) return pref172.address;
 	// Fallback: any non-internal IPv4

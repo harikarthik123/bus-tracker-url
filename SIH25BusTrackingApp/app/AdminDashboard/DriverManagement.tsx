@@ -9,9 +9,10 @@ import { useAdminI18n } from '../utils/i18n';
 import * as DocumentPicker from 'expo-document-picker';
 import { enqueueRequest } from '../utils/outbox';
 
-const API_URL = 'http://192.168.137.1:5000/api/admin/drivers'; // API URL for driver management
+import { API_URLS } from '../../config/api';
+const API_URL = API_URLS.ADMIN + '/drivers';
 
-const DriverManagement = () => {
+  const DriverManagement = () => {
   const router = useRouter();
   const { t } = useAdminI18n();
   const online = useOnline();
@@ -20,6 +21,7 @@ const DriverManagement = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAll, setShowAll] = useState(false);
   const [editingDriverId, setEditingDriverId] = useState<string | null>(null);
+  const [activeCard, setActiveCard] = useState<'add' | 'view' | 'upload' | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -146,7 +148,7 @@ const DriverManagement = () => {
       const form = new FormData();
       // @ts-ignore
       form.append('file', { uri: file.uri, name: file.name || 'drivers.csv', type: 'text/csv' });
-      await axios.post('http://192.168.137.1:5000/api/admin/drivers/bulk', form, { headers: { 'x-auth-token': token, 'Content-Type': 'multipart/form-data' } });
+      await axios.post(API_URL + '/bulk', form, { headers: { 'x-auth-token': token, 'Content-Type': 'multipart/form-data' } });
       Alert.alert('Success', 'Drivers uploaded.');
       fetchDrivers();
     } catch (e) {
@@ -155,57 +157,74 @@ const DriverManagement = () => {
     }
   };
 
+  const [selectedRow, setSelectedRow] = useState<string | null>(null);
   const renderDriverItem = ({ item }: { item: Driver }) => (
-    <View style={styles.driverCard}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.driverName}>{item.name}</Text>
-        <Text style={styles.driverDetails}>Email: {item.email}</Text>
-        {item.busId && <Text style={styles.driverDetails}>Bus ID: {item.busId}</Text>}
-        {item.syncStatus !== 'synced' && (
-          <Text style={styles.syncStatus}>{item.syncStatus}</Text>
-        )}
+    <TouchableOpacity onPress={() => setSelectedRow(selectedRow === item._id ? null : item._id)} activeOpacity={0.85}>
+      <View style={styles.tableRow}>
+        <Text style={[styles.tableCell, { flex: 2 }]}>{item.name}</Text>
+        <Text style={[styles.tableCell, { flex: 2 }]}>{item.driverId || '-'}</Text>
+        <Text style={[styles.tableCell, { flex: 3 }]}>{item.email}</Text>
       </View>
-      <View style={styles.driverActions}>
-        <TouchableOpacity
-          style={styles.iconButton}
-          onPress={() => handleEditDriver(item)}
-          activeOpacity={0.7}
-        >
-          {/* Replace emoji with <MaterialIcons name="edit" size={22} color="#007bff" /> if using icons */}
-          <Text style={styles.iconText}>✏️</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.iconButton}
-          onPress={() => handleDeleteDriver(item._id)}
-          activeOpacity={0.7}
-        >
-          {/* Replace emoji with <MaterialIcons name="delete" size={22} color="#dc3545" /> if using icons */}
-          <Text style={styles.iconText}>🗑️</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+      {selectedRow === item._id && (
+        <View style={styles.tableActions}>
+          <TouchableOpacity style={[styles.smallBtn, styles.smallEdit]} onPress={() => handleEditDriver(item)}>
+            <Text style={styles.smallBtnText}>Edit</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.smallBtn, styles.smallDelete]} onPress={() => handleDeleteDriver(item._id)}>
+            <Text style={styles.smallBtnText}>Delete</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </TouchableOpacity>
   );
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.navButton} onPress={() => router.back()}>
-          <Text style={styles.navButtonText}>← Back</Text>
+          <Text style={styles.navButtonText}>←</Text>
         </TouchableOpacity>
         <Text style={styles.title}>{t('screen.driver.title')}</Text>
         <View style={{ width: 80 }} />
       </View>
       <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-        <View style={styles.divider} />
-        <View style={styles.uploadBox}>
-          <Text style={styles.uploadTitle}>File Upload (CSV/XLSX)</Text>
-          <Text style={styles.uploadHint}>Required: driverId, name, email. Optional: password, busId/busNumber/reg_no</Text>
-          <TouchableOpacity style={[styles.actionButton, styles.createButton]} onPress={handleUploadCsv}>
-            <Text style={styles.buttonText}>Upload CSV</Text>
+        {/* Cards grid */}
+        <View style={styles.cardRow}>
+          <TouchableOpacity style={[styles.cardItem, styles.cardAdd, activeCard === 'add' && styles.cardItemActive]} onPress={() => { setActiveCard('add'); }}>
+            <MaterialIcons name="person-add" size={28} color="#ffffff" />
+            <Text style={[styles.cardLabel, { color: '#ffffff' }]}>Add Driver</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.cardItem, styles.cardView, activeCard === 'view' && styles.cardItemActive]} onPress={() => { setActiveCard('view'); }}>
+            <MaterialIcons name="people" size={28} color="#ffffff" />
+            <Text style={[styles.cardLabel, { color: '#ffffff' }]}>View Drivers</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.cardItem, styles.cardUpload, activeCard === 'upload' && styles.cardItemActive]} onPress={() => { setActiveCard('upload'); }}>
+            <MaterialIcons name="file-upload" size={28} color="#ffffff" />
+            <Text style={[styles.cardLabel, { color: '#ffffff' }]}>Upload File</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Upload section */}
+        {activeCard === 'upload' && (
+          <>
+            <View style={styles.divider} />
+            <View style={styles.uploadBox}>
+              <Text style={styles.uploadTitle}>File Upload (CSV/XLSX)</Text>
+              <Text style={styles.uploadHint}>Required: driverId, name, email, password. Optional: busId/busNumber/regNo</Text>
+              <TouchableOpacity style={[styles.actionButton, styles.createButton, { flexDirection: 'row', alignItems: 'center', gap: 8 }]} onPress={handleUploadCsv}>
+                <MaterialIcons name="file-upload" size={18} color="#1F2937" />
+                <Text style={styles.buttonText}>Upload CSV</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{editingDriverId ? t('driver.update') : t('driver.add')}</Text>
+          {activeCard === 'add' || editingDriverId ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <Text style={styles.sectionTitle}>{editingDriverId ? t('driver.update') : 'Add Driver'}</Text>
+          </View>
+          ) : null}
+          {(activeCard === 'add' || editingDriverId) && (
           <View style={styles.formContainer}>
             <TextInput
               style={styles.input}
@@ -245,12 +264,16 @@ const DriverManagement = () => {
               style={[styles.actionButton, editingDriverId ? styles.updateButton : styles.createButton]}
               onPress={editingDriverId ? handleUpdateDriver : handleAddDriver}
             >
+              <MaterialIcons name={editingDriverId ? 'save' : 'person-add'} size={18} color="#1F2937" />
               <Text style={styles.buttonText}>
                 {editingDriverId ? t('driver.update') : t('driver.add')}
               </Text>
             </TouchableOpacity>
           </View>
+          )}
         </View>
+        {activeCard === 'view' && (
+        <>
         <View style={styles.divider} />
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('driver.list.title')}</Text>
@@ -264,11 +287,18 @@ const DriverManagement = () => {
           {(!searchQuery && !showAll) ? (
             <View>
               <TouchableOpacity style={[styles.actionButton, styles.updateButton]} onPress={() => setShowAll(true)}>
+                <MaterialIcons name="visibility" size={18} color="#fff" />
                 <Text style={styles.buttonText}>View All</Text>
               </TouchableOpacity>
               <Text style={{ color: '#6b7280', marginTop: 8 }}>Start typing to search drivers or tap View All.</Text>
             </View>
           ) : null}
+          {/* Drivers table */}
+          <View style={styles.tableHeader}>
+            <Text style={[styles.tableHeadCell, { flex: 2 }]}>Driver Name</Text>
+            <Text style={[styles.tableHeadCell, { flex: 2 }]}>Driver ID</Text>
+            <Text style={[styles.tableHeadCell, { flex: 3 }]}>Email</Text>
+          </View>
           <FlatList
             data={(searchQuery ? drivers.filter(d => (d.name||'').toLowerCase().includes(searchQuery.toLowerCase()) || (d.email||'').toLowerCase().includes(searchQuery.toLowerCase()) || (d.driverId||'').toLowerCase().includes(searchQuery.toLowerCase())) : (showAll ? drivers : []))}
             keyExtractor={(item) => item._id.toString()}
@@ -279,6 +309,8 @@ const DriverManagement = () => {
             scrollEnabled={false} // Add this line
           />
         </View>
+        </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -312,12 +344,12 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 6,
-    backgroundColor: '#F59E0B',
+    backgroundColor: '#000000',
     marginHorizontal: 4,
     elevation: 2,
   },
   navButtonText: {
-    color: '#fff',
+    color: '#ffffff',
     fontWeight: 'bold',
     fontSize: 15,
   },
@@ -348,6 +380,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 10,
   },
+  cardRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 18, marginTop: 40 },
+  cardItem: { borderRadius: 12, paddingVertical: 18, alignItems: 'center', justifyContent: 'center', elevation: 2, margin: 8, minWidth: 110, maxWidth: 160, flexGrow: 0 },
+  cardItemActive: { borderColor: '#F59E0B', borderWidth: 2 },
+  cardLabel: { marginTop: 8, fontWeight: '800' },
+  cardAdd: { backgroundColor: '#10b981' },
+  cardView: { backgroundColor: '#3b82f6' },
+  cardUpload: { backgroundColor: '#f59e0b' },
   sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
@@ -384,6 +423,10 @@ const styles = StyleSheet.create({
     marginTop: 8,
     elevation: 2,
   },
+  smallBtn: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6, alignItems: 'center' },
+  smallEdit: { backgroundColor: '#0d6efd' },
+  smallDelete: { backgroundColor: '#dc3545' },
+  smallBtnText: { color: '#fff', fontWeight: '700' },
   createButton: {
     backgroundColor: '#F59E0B',
   },
@@ -402,49 +445,15 @@ const styles = StyleSheet.create({
   listContent: {
     paddingBottom: 40,
   },
-  driverCard: {
-    backgroundColor: '#fff',
-    padding: 18,
-    borderRadius: 12,
-    marginBottom: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.09,
-    shadowRadius: 6,
-    elevation: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  driverName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#2c3e50',
-    marginBottom: 2,
-  },
-  driverDetails: {
-    fontSize: 15,
-    color: '#555',
-    marginBottom: 2,
-  },
-  syncStatus: {
-    fontSize: 13,
-    color: '#e67e22',
-    marginTop: 2,
-  },
-  driverActions: {
-    flexDirection: 'row',
-    marginLeft: 10,
-  },
-  iconButton: {
-    backgroundColor: '#f0f2f5',
-    borderRadius: 6,
-    padding: 8,
-    marginLeft: 6,
-    elevation: 1,
-  },
-  iconText: {
-    fontSize: 20,
-  },
+  tableHeader: { flexDirection: 'row', backgroundColor: '#f1f5f9', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 8 },
+  tableHeadCell: { fontWeight: '800', color: '#1f2937' },
+  tableRow: { flexDirection: 'row', backgroundColor: '#fff', paddingVertical: 12, paddingHorizontal: 12, borderRadius: 8, marginBottom: 8, alignItems: 'center', elevation: 1 },
+  tableCell: { color: '#1f2937' },
+  tableActions: { flexDirection: 'row', gap: 10, justifyContent: 'flex-end', paddingHorizontal: 12, paddingBottom: 8 },
+  addToggleButton: { backgroundColor: '#F59E0B', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  addToggleText: { color: '#1F2937', fontWeight: '800', marginLeft: 6 },
+  headerAction: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  headerActionText: { marginLeft: 6, color: '#1F2937', fontWeight: '800' },
 });
 
 export default DriverManagement;

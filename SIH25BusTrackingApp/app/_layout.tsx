@@ -16,6 +16,7 @@ import { enableQueryPersistence } from './utils/queryPersistence';
 import NetInfo from '@react-native-community/netinfo';
 import { onlineManager } from '@tanstack/react-query';
 import { startOutboxProcessor } from './utils/outbox';
+import { LanguageProvider } from './utils/i18n';
 
 export const unstable_settings = {
   // Ensure that reloading on `/modal` keeps a back button present.
@@ -102,18 +103,20 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#FFFBEB' }}>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <Stack initialRouteName={initialRoute}>
-          <Stack.Screen name="LoginScreen" options={{ headerShown: false }} />
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-          <Stack.Screen name="PassengerSignupScreen" options={{ title: 'Sign Up', presentation: 'modal' }} />
-          <Stack.Screen name="OTPScreen" options={{ title: 'Verify OTP', presentation: 'modal' }} />
-          {/* Rely on file-system routing for AdminDashboard, DriverDashboard, PassengerDashboard and nested AdminDashboard screens */}
-          </Stack>
-          <StatusBar style="auto" />
-          <ConnectivityBanner />
-        </ThemeProvider>
+        <LanguageProvider>
+          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <Stack initialRouteName={initialRoute}>
+            <Stack.Screen name="LoginScreen" options={{ headerShown: false }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+            <Stack.Screen name="PassengerSignupScreen" options={{ title: 'Sign Up', presentation: 'modal' }} />
+            <Stack.Screen name="OTPScreen" options={{ title: 'Verify OTP', presentation: 'modal' }} />
+            {/* Rely on file-system routing for AdminDashboard, DriverDashboard, PassengerDashboard and nested AdminDashboard screens */}
+            </Stack>
+            <StatusBar style="auto" />
+            <ConnectivityBanner />
+          </ThemeProvider>
+        </LanguageProvider>
       </QueryClientProvider>
     </GestureHandlerRootView>
   );
